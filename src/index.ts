@@ -15,3 +15,11 @@ export type {
     Storage,
     PipelineContext,
 } from "./core/types";
+
+export type {
+    PipelineErrorCode,
+    PipelineError,
+    ValidationError,
+    ProcessorError,
+    StorageError,
+} from "./utils/errors"
