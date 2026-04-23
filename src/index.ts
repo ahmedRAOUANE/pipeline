@@ -18,8 +18,11 @@ export type {
 
 export type {
     PipelineErrorCode,
+} from "./utils/errors";
+
+export {
     PipelineError,
     ValidationError,
     ProcessorError,
     StorageError,
-} from "./utils/errors"
+} from "./utils/errors";

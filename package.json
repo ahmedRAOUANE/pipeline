@@ -1,13 +1,13 @@
 {
   "name": "media-pipline",
-  "version": "1.2.0",
+  "version": "1.2.3",
   "description": "A storage-agnostic file processing pipeline for Node.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.js"
     }
   },
