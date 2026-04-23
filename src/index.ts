@@ -13,4 +13,5 @@ export type {
     Processor,
     Validator,
     Storage,
+    PipelineContext,
 } from "./core/types";
