@@ -11,12 +11,26 @@ export type PipelineResult = {
     size: number;
 };
 
-export type Validator = (file: PipelineFile) => void | Promise<void>;
+// old version
+// export type Validator = (file: PipelineFile) => void | Promise<void>;
 
-export type Processor = (
-    file: PipelineFile
-) => PipelineFile | Promise<PipelineFile>;
+// export type Processor = (
+//     file: PipelineFile
+// ) => PipelineFile | Promise<PipelineFile>;
 
 export type Storage = {
     save(file: PipelineFile): Promise<PipelineResult>;
 };
+
+export type PipelineContext = {
+    file: PipelineFile;
+    metadata: Record<string, any>;
+};
+
+export type Validator = (
+    ctx: PipelineContext
+) => void | Promise<void>;
+
+export type Processor = (
+    ctx: PipelineContext
+) => PipelineContext | Promise<PipelineContext>;

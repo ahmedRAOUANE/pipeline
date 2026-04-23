@@ -1,5 +1,5 @@
 import { executePipeline } from "./executor";
-import { PipelineFile, Processor, Validator, Storage, PipelineResult } from "./types";
+import { PipelineFile, Processor, Validator, Storage, PipelineResult, PipelineContext } from "./types";
 
 export function createPipeline(config: {
     validators?: Validator[];
@@ -8,8 +8,13 @@ export function createPipeline(config: {
 }) {
     return {
         async process(file: PipelineFile): Promise<PipelineResult> {
-            return executePipeline({
+            const ctx: PipelineContext = {
                 file,
+                metadata: {}
+            } 
+            
+            return executePipeline({
+                ctx,
                 ...(config.validators && { validators: config.validators }),
                 ...(config.processors && { processors: config.processors }),
                 storage: config.storage,
