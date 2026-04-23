@@ -1,59 +1,50 @@
-import {
-    PipelineContext,
-    Processor,
-    Validator,
-    Storage,
-    PipelineResult,
-} from "./types";
-import {
-    PipelineError,
-    ValidationError,
-    ProcessorError,
-    StorageError,
-} from "../utils/errors";
+import { PipelineHooks } from "./hooks";
+import { PipelineContext, PipelineResult, Processor, Storage, Validator } from "./types";
 
 export async function executePipeline(params: {
     ctx: PipelineContext;
     validators?: Validator[];
     processors?: Processor[];
     storage: Storage;
+    hooks?: PipelineHooks;
 }): Promise<PipelineResult> {
     let ctx = params.ctx;
 
-    // 1. Validators
+    const hooks = params.hooks;
+
     try {
+        // 🟢 onStart
+        await hooks?.onStart?.(ctx);
+        
+        // 🟡 onValidate
         for (const validator of params.validators ?? []) {
             await validator(ctx);
         }
-    } catch (err: any) {
-        if (err instanceof PipelineError) throw err;
-
-        throw new ValidationError(err.message || "Validation failed", {
-            originalError: err,
-        });
-    }
-
-    // 2. Processors
-    try {
+        
+        await hooks?.afterValidate?.(ctx);
+        
+        // 🔵 onProcess
         for (const processor of params.processors ?? []) {
             ctx = await processor(ctx);
         }
+        
+        await hooks?.afterProcess?.(ctx);
+        
+        // 💾 storage
+        const result = await params.storage.save(ctx.file);
+        
+        // 🟣 onFinish
+        await hooks?.onFinish?.(result, ctx);
+
+        return result;
+
     } catch (err: any) {
-        if (err instanceof PipelineError) throw err;
 
-        throw new ProcessorError(err.message || "Processing failed", {
-            originalError: err,
-        });
-    }
+        const error = err instanceof Error ? err : new Error(String(err));
 
-    // 3. Storage
-    try {
-        return await params.storage.save(ctx.file);
-    } catch (err: any) {
-        if (err instanceof PipelineError) throw err;
+        // 🔴 onError
+        await hooks?.onError?.(error, ctx);
 
-        throw new StorageError(err.message || "Storage failed", {
-            originalError: err,
-        });
+        throw err;
     }
 }

@@ -1,3 +1,5 @@
+import { PipelineHooks } from "./hooks";
+
 export type PipelineFile = {
     buffer: Buffer;
     filename: string;
@@ -10,13 +12,6 @@ export type PipelineResult = {
     path: string;
     size: number;
 };
-
-// old version
-// export type Validator = (file: PipelineFile) => void | Promise<void>;
-
-// export type Processor = (
-//     file: PipelineFile
-// ) => PipelineFile | Promise<PipelineFile>;
 
 export type Storage = {
     save(file: PipelineFile): Promise<PipelineResult>;
@@ -34,3 +29,10 @@ export type Validator = (
 export type Processor = (
     ctx: PipelineContext
 ) => PipelineContext | Promise<PipelineContext>;
+
+export type PipelineConfig = {
+    validators?: Validator[];
+    processors?: Processor[];
+    storage: Storage;
+    hooks?: PipelineHooks;
+};
