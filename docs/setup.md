@@ -45,12 +45,33 @@ npm install tsup -D
 
 ```
 media-pipline/
-│── src/
-│   └── index.ts
 │
-│── dist/              # Build output
-│── package.json
-│── tsconfig.json
+├── src/
+│   ├── core/
+│   │   ├── pipeline.ts        # Public API (createPipeline)
+│   │   ├── executor.ts        # Pipeline execution engine
+│   │   └── types.ts           # Core types
+│   │
+│   ├── storage/
+│   │   └── local.storage.ts   # Local filesystem adapter
+│   │
+│   ├── validators/
+│   │   ├── size.validator.ts  # File size validation
+│   │   └── mime.validator.ts  # MIME validation
+│   │
+│   ├── processors/
+│   │   └── identity.processor.ts
+│   │
+│   ├── utils/
+│   │   ├── errors.ts          # (future) error system
+│   │   └── file.ts            # helpers
+│   │
+│   └── index.ts               # Public exports
+│
+├── dist/
+├── package.json
+├── tsconfig.json
+└── README.md
 ```
 
 ---
