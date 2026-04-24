@@ -26,3 +26,7 @@ export {
     ProcessorError,
     StorageError,
 } from "./utils/errors";
+
+export { PipelineBuilder } from "./core/builder"
+
+export type {PipelinePlugin} from "./core/plugin"

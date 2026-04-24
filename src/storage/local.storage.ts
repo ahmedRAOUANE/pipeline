@@ -14,7 +14,11 @@ export function localStorage(basePath: string): Storage {
                 url: filePath,
                 path: filePath,
                 size: file.size,
-                metadata: {}
+                metadata: {},
+                meta: {
+                    plugins: [], 
+                    trace: [],
+                },
             };
         },
     };

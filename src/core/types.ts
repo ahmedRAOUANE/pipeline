@@ -1,4 +1,5 @@
 import { PipelineHooks } from "./hooks";
+import { PipelineMeta } from "./plugin-meta";
 
 export type PipelineFile = {
     buffer: Buffer;
@@ -11,7 +12,8 @@ export type PipelineResult = {
     url: string;
     path: string;
     size: number;
-    metadata: Record<string, any>
+    metadata: Record<string, any>;
+    meta: PipelineMeta;
 };
 
 export type Storage = {
@@ -21,6 +23,7 @@ export type Storage = {
 export type PipelineContext = {
     file: PipelineFile;
     metadata: Record<string, any>;
+    meta: PipelineMeta;
 };
 
 export type Validator = (
@@ -36,4 +39,14 @@ export type PipelineConfig = {
     processors?: Processor[];
     storage: Storage;
     hooks?: PipelineHooks;
+};
+
+export type OwnedProcessor = {
+    fn: Processor;
+    plugin: string;
+};
+
+export type OwnedValidator = {
+    fn: Validator;
+    plugin: string;
 };

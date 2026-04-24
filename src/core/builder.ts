@@ -1,11 +1,22 @@
-import { PipelineConfig, Processor, Storage, Validator } from "./types";
+import { OwnedProcessor, OwnedValidator, PipelineConfig, Processor, Storage, Validator } from "./types";
 import { PipelineHooks } from "./hooks";
+import { PipelineMeta, PluginMeta } from "./plugin-meta";
 
 export class PipelineBuilder {
+    // old version
     validators: Validator[] = [];
     processors: Processor[] = [];
+
+    // validators: OwnedValidator[] = [];
+    // processors: OwnedProcessor[] = [];
     hooks: PipelineHooks = {};
     storage: Storage;
+    meta: PipelineMeta = {
+        plugins: [],
+        trace: []
+    };
+
+    private currentPlugin?: string;
 
     constructor(config: PipelineConfig) {
         this.validators = config.validators ?? [];
@@ -65,5 +76,9 @@ export class PipelineBuilder {
                     break;
             }
         }
+    }
+
+    registerPlugin(meta: PluginMeta) {
+        this.meta.plugins.push(meta);
     }
 }

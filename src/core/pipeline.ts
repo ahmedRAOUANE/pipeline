@@ -1,5 +1,5 @@
 import { executePipeline } from "./executor";
-import { PipelineConfig } from "./types";
+import { PipelineConfig, PipelineContext, PipelineFile } from "./types";
 import { PipelinePlugin } from "./plugin";
 import { PipelineBuilder } from "./builder";
 
@@ -8,17 +8,21 @@ export function createPipeline(config: PipelineConfig) {
 
     return {
         use(plugin: PipelinePlugin) {
-            plugin(builder);
+            plugin.setup(builder);
+            builder.registerPlugin({
+                name: plugin.name ?? "unknown",
+                version: plugin.version as unknown as string,
+            });
             return this;
         },
 
-        async process(file: any) {
-            const ctx = {
+        async process(file: PipelineFile) {
+            const ctx: PipelineContext = {
                 file,
                 metadata: {},
+                meta: builder.meta
             };
 
-            // console.log("processors length:", builder.processors.length);
             return executePipeline({
                 ctx,
                 storage: builder.storage,
