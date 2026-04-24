@@ -9,6 +9,7 @@ export async function executePipeline(params: {
     hooks?: PipelineHooks;
 }): Promise<PipelineResult> {
     let ctx = params.ctx;
+    console.log("BEFORE processors:", ctx.metadata);
 
     const hooks = params.hooks;
 
@@ -26,6 +27,7 @@ export async function executePipeline(params: {
         // 🔵 onProcess
         for (const processor of params.processors ?? []) {
             ctx = await processor(ctx);
+            console.log("AFTER processor:", ctx.metadata);
         }
         
         await hooks?.afterProcess?.(ctx);
@@ -36,7 +38,7 @@ export async function executePipeline(params: {
         // 🟣 onFinish
         await hooks?.onFinish?.(result, ctx);
 
-        return result;
+        return {...result, metadata: ctx.metadata};
 
     } catch (err: any) {
 

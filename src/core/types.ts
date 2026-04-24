@@ -11,6 +11,7 @@ export type PipelineResult = {
     url: string;
     path: string;
     size: number;
+    metadata: Record<string, any>
 };
 
 export type Storage = {
