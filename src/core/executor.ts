@@ -35,6 +35,11 @@ export async function executePipeline(params: {
         }
         
         await hooks?.afterValidate?.(ctx);
+        trace(ctx, {
+            plugin: "core",
+            stage: "hook",
+            message: "afterValidate executed",
+        });
         
         // 🔵 onProcess
         for (const processor of params.processors ?? []) {
@@ -51,6 +56,11 @@ export async function executePipeline(params: {
         }
         
         await hooks?.afterProcess?.(ctx);
+        trace(ctx, {
+            plugin: "core",
+            stage: "hook",
+            message: "afterProcess executed",
+        });
         
         // 💾 storage
         const start = Date.now();

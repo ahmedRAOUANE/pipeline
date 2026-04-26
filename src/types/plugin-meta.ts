@@ -1,6 +1,6 @@
 export type PluginMeta = {
     name: string;
-    version?: string;
+    version?: string | undefined;
     priority?: number;
 };
 

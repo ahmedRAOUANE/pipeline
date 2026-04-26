@@ -89,6 +89,7 @@ src/
 ├── processors/
 │   └── identity.processor.ts # No-op processor
 └── utils/
+│   ├── plugins.ts        # plugin utilities
     └── errors.ts         # Error classes
 ```
 

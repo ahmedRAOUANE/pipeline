@@ -2,7 +2,8 @@ export type PipelineErrorCode =
     | "VALIDATION_ERROR"
     | "PROCESSOR_ERROR"
     | "STORAGE_ERROR"
-    | "UNKNOWN_ERROR";
+    | "UNKNOWN_ERROR"
+    | "PLUGIN_ERROR";
 
 export class PipelineError extends Error {
     public code: PipelineErrorCode;
@@ -38,5 +39,11 @@ export class StorageError extends PipelineError {
     constructor(message: string, details?: Record<string, any>) {
         super(message, "STORAGE_ERROR", details);
         this.name = "StorageError";
+    }
+}
+export class PluginError extends PipelineError {
+    constructor(message: string, details?: Record<string, any>) {
+        super(message, "PLUGIN_ERROR", details);
+        this.name = "PluginError";
     }
 }
