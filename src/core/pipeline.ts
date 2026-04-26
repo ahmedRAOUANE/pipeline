@@ -2,7 +2,6 @@ import { executePipeline } from "./executor";
 import { PipelineConfig, PipelineContext, PipelineFile } from "../types/pipeline";
 import { PipelinePlugin, PipelinePluginFunction, PipelinePluginSetup } from "../types/plugin";
 import { PipelineBuilder } from "./builder";
-import { PluginMeta } from "../types/plugin-meta";
 import { isPipelinePlugin } from "../utils/plugins";
 import { PluginError } from "../utils/errors";
 
@@ -28,7 +27,7 @@ export function createPipeline(config: PipelineConfig) {
             } else if (typeof plugin === 'function') {
                 setup = plugin;
                 const displayName = (setup as PipelinePluginFunction).displayName;
-                name = plugin.name?.trim() || displayName|| "anonymous-plugin";
+                name = displayName || plugin.name?.trim() || "anonymous-plugin";
 
                 // send warning instead of throwing error when no known name set for the plugin
                 if (!plugin.name || plugin.name.trim() === '') {
@@ -52,7 +51,10 @@ export function createPipeline(config: PipelineConfig) {
             const ctx: PipelineContext = {
                 file,
                 metadata: {},
-                meta: builder.meta
+                meta: {
+                    plugins: [...builder.meta.plugins],   // copy plugin list (static)
+                    trace: []                             // fresh trace array for this call
+                }
             };
             return executePipeline({
                 ctx,
