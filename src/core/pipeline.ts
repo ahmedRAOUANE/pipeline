@@ -1,6 +1,6 @@
 import { executePipeline } from "./executor";
 import { PipelineConfig, PipelineContext, PipelineFile } from "../types/pipeline";
-import { PipelinePlugin, PipelinePluginSetup } from "../types/plugin";
+import { PipelinePlugin, PipelinePluginFunction, PipelinePluginSetup } from "../types/plugin";
 import { PipelineBuilder } from "./builder";
 import { PluginMeta } from "../types/plugin-meta";
 import { isPipelinePlugin } from "../utils/plugins";
@@ -27,7 +27,7 @@ export function createPipeline(config: PipelineConfig) {
                 version = plugin.version;
             } else if (typeof plugin === 'function') {
                 setup = plugin;
-                const displayName = (setup as any).displayName;
+                const displayName = (setup as PipelinePluginFunction).displayName;
                 name = plugin.name?.trim() || displayName|| "anonymous-plugin";
 
                 // send warning instead of throwing error when no known name set for the plugin
