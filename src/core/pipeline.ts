@@ -1,8 +1,9 @@
 import { executePipeline } from "./executor";
 import { PipelineConfig, PipelineContext, PipelineFile } from "../types/pipeline";
-import { PipelinePlugin, PipelinePluginSetup, isPipelinePlugin } from "../types/plugin";
+import { PipelinePlugin, PipelinePluginSetup } from "../types/plugin";
 import { PipelineBuilder } from "./builder";
 import { PluginMeta } from "../types/plugin-meta";
+import { isPipelinePlugin } from "../utils/plugins";
 
 export function createPipeline(config: PipelineConfig) {
     const builder = new PipelineBuilder(config);

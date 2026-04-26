@@ -75,11 +75,12 @@ src/
 │   ├── pipeline.ts       # Pipeline factory
 │   ├── builder.ts        # Pipeline builder
 │   ├── executor.ts       # Pipeline execution engine
-│   ├── hooks.ts          # Lifecycle hook types
-│   ├── plugin.ts         # Plugin definitions
-│   ├── plugin-meta.ts    # Plugin metadata types
 │   ├── tracer.ts         # Execution tracing
-│   └── types.ts          # Core type definitions
+├── types/
+│   ├── hooks.ts             # Lifecycle hook types
+│   ├── plugin.ts            # Plugin definitions
+│   ├── plugin-meta.ts       # Plugin metadata types
+│   └── pipeline.ts          # Core type definitions
 ├── storage/
 │   └── local.storage.ts  # Local filesystem storage
 ├── validators/
