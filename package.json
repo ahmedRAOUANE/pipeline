@@ -1,6 +1,6 @@
 {
   "name": "media-pipeline",
-  "version": "1.5.13",
+  "version": "1.5.14",
   "description": "A storage-agnostic file processing pipeline for Node.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
