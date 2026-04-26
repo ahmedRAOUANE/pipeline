@@ -85,17 +85,18 @@ export async function executePipeline(params: {
         return { ...result, metadata: { ...ctx.metadata, ...result.metadata }, meta: ctx.meta };
 
     } catch (err: any) {
-
         const error = err instanceof Error ? err : new Error(String(err));
-
-        // 🔴 onError
-        await hooks?.onError?.(error, ctx);
+        try {
+            await hooks?.onError?.(error, ctx);
+        } catch (hookErr) {
+            console.error("onError hook failed:", hookErr);
+            //? Optionally trace hook failure
+        }
         trace(ctx, {
             plugin: "core",
             stage: "hook",
             message: "onError executed",
         });
-
         throw err;
     }
 }
