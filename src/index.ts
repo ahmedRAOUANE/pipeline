@@ -25,6 +25,7 @@ export {
     ValidationError,
     ProcessorError,
     StorageError,
+    PluginError
 } from "./utils/errors";
 
 export { PipelineBuilder } from "./core/builder"
