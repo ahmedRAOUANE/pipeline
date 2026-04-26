@@ -14,7 +14,7 @@ export type {
     Validator,
     Storage,
     PipelineContext,
-} from "./core/types";
+} from "./types/pipeline";
 
 export type {
     PipelineErrorCode,
@@ -29,4 +29,4 @@ export {
 
 export { PipelineBuilder } from "./core/builder"
 
-export type {PipelinePlugin} from "./core/plugin"
+export type { PipelinePlugin } from "./types/plugin"

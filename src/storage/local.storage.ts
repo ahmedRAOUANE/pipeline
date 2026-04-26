@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { PipelineFile, PipelineResult, Storage } from "../core/types";
+import { PipelineFile, PipelineResult, Storage } from "../types/pipeline";
 
 export function localStorage(basePath: string): Storage {
     return {

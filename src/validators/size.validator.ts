@@ -1,4 +1,4 @@
-import { Validator } from "../core/types";
+import { Validator } from "../types/pipeline";
 import { ValidationError } from "../utils/errors";
 
 export function maxSize(limit: number): Validator {

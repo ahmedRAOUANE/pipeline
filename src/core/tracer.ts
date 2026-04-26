@@ -1,4 +1,4 @@
-import { PipelineContext } from "./types";
+import { PipelineContext } from "../types/pipeline";
 
 export function trace(
     ctx: PipelineContext,

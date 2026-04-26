@@ -1,8 +1,8 @@
 import { executePipeline } from "./executor";
-import { PipelineConfig, PipelineContext, PipelineFile } from "./types";
-import { PipelinePlugin, PipelinePluginSetup, isPipelinePlugin } from "./plugin";
+import { PipelineConfig, PipelineContext, PipelineFile } from "../types/pipeline";
+import { PipelinePlugin, PipelinePluginSetup, isPipelinePlugin } from "../types/plugin";
 import { PipelineBuilder } from "./builder";
-import { PluginMeta } from "./plugin-meta";
+import { PluginMeta } from "../types/plugin-meta";
 
 export function createPipeline(config: PipelineConfig) {
     const builder = new PipelineBuilder(config);
@@ -21,7 +21,7 @@ export function createPipeline(config: PipelineConfig) {
                 setup = plugin;
                 name = plugin.name || "anonymous-plugin";
             } else {
-                throw new Error("Plugin must be an object with setup() or a function");
+                throw new Error("Plugin must be an object: {required setup(), required name: string, optional version: string} or a function");
             }
 
             setup(builder);

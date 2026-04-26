@@ -1,6 +1,6 @@
-import { OwnedProcessor, OwnedValidator, PipelineConfig, Processor, Storage, Validator } from "./types";
-import { PipelineHooks } from "./hooks";
-import { PipelineMeta, PluginMeta } from "./plugin-meta";
+import { OwnedProcessor, OwnedValidator, PipelineConfig, Processor, Storage, Validator } from "../types/pipeline";
+import { PipelineHooks } from "../types/hooks";
+import { PipelineMeta, PluginMeta } from "../types/plugin-meta";
 
 export class PipelineBuilder {
     // old version

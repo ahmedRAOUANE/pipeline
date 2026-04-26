@@ -1,6 +1,6 @@
-import { PipelineHooks } from "./hooks";
+import { PipelineHooks } from "../types/hooks";
 import { trace } from "./tracer";
-import { PipelineContext, PipelineResult, Processor, Storage, Validator } from "./types";
+import { PipelineContext, PipelineResult, Processor, Storage, Validator } from "../types/pipeline";
 
 export async function executePipeline(params: {
     ctx: PipelineContext;
@@ -72,7 +72,7 @@ export async function executePipeline(params: {
             message: "onFinish executed",
         });
 
-        return {...result, metadata: ctx.metadata, meta: ctx.meta};
+        return { ...result, metadata: { ...ctx.metadata, ...result.metadata }, meta: ctx.meta };
 
     } catch (err: any) {
 

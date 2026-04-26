@@ -1,4 +1,4 @@
-import { PipelineContext, PipelineResult } from "./types";
+import { PipelineContext, PipelineResult } from "./pipeline";
 import { PipelineError } from "../utils/errors";
 
 export type PipelineHooks = {
