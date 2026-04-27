@@ -2,198 +2,122 @@
 
 ## Prerequisites
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Node.js | >= 18.0.0 | LTS recommended |
-| npm | >= 9.0.0 | Comes with Node.js |
+- A current Node.js LTS release. The repo does not declare an `engines` field, but the toolchain assumes modern Node.js behavior and built-ins.
+- `npm`
 
 ---
 
-## Installation
+## Install And Build
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
 git clone <repository-url>
-cd media-pipeline
+cd media-pipline
 ```
 
-### 2. Install Dependencies
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 3. Build the Project
+### 3. Build the library
 
 ```bash
 npm run build
 ```
 
 This generates:
-- `dist/index.cjs` - CommonJS build
-- `dist/index.js` - ES Module build
-- `dist/index.d.ts` - TypeScript declarations
+
+- `dist/index.js`
+- `dist/index.mjs`
+- `dist/index.d.ts`
+- `dist/index.d.mts`
 
 ---
 
-## Development
+## What The Repo Actually Exposes
 
-### Watch Mode
+`package.json` currently defines a single npm script:
 
-For development with auto-rebuild:
-
-```bash
-npm run dev
+```json
+{
+  "scripts": {
+    "build": "tsup"
+  }
+}
 ```
 
-### Type Checking
+That means the following are not preconfigured today:
 
-```bash
-npm run typecheck
-```
+- watch mode
+- npm-based test commands
+- npm-based typecheck command
+- linting commands
 
 ---
 
-## Testing
+## Manual Smoke Testing
 
-### Run All Tests
+The `tests/` directory contains exploratory scripts, but it is not wired into `npm test`. For a simple local smoke test after building, import from `dist/` directly.
 
-```bash
-npm test
+### CommonJS example
+
+```js
+const { createPipeline, localStorage } = require("./dist/index.js");
+
+const pipeline = createPipeline({
+  storage: localStorage("./uploads"),
+});
 ```
 
-### Watch Mode
+### ESM example
 
-```bash
-npm run test:watch
-```
+```js
+import { createPipeline, localStorage } from "./dist/index.mjs";
 
-### Test Coverage
-
-```bash
-npm test -- --coverage
+const pipeline = createPipeline({
+  storage: localStorage("./uploads"),
+});
 ```
 
 ---
 
 ## Project Structure
 
+```text
+media-pipline/
+|-- docs/
+|-- dist/
+|-- src/
+|   |-- core/
+|   |-- processors/
+|   |-- storage/
+|   |-- types/
+|   |-- utils/
+|   `-- validators/
+|-- tests/
+|-- package.json
+|-- tsconfig.json
+`-- tsup.config.ts
 ```
-media-pipeline/
-├── src/
-│   ├── index.ts           # Main entry point
-│   ├── core/              # Core pipeline modules
-│   │   ├── builder.ts
-│   │   ├── executor.ts
-│   │   ├── hooks.ts
-│   │   ├── pipeline.ts
-│   │   ├── plugin.ts
-│   │   ├── plugin-meta.ts
-│   │   ├── tracer.ts
-│   │   └── types.ts
-│   ├── processors/        # Built-in processors
-│   ├── storage/           # Storage implementations
-│   ├── utils/             # Utilities
-│   └── validators/        # Built-in validators
-├── tests/                 # Test files
-├── dist/                  # Build output
-├── docs/                  # Documentation
-├── package.json
-├── tsconfig.json
-└── tsup.config.ts
-```
-
----
-
-## Creating a Pipeline
-
-### Basic Usage
-
-```typescript
-import { createPipeline, localStorage, maxSize, allowedMimeTypes } from './dist/index.js';
-
-// Create pipeline
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    validators: [
-        maxSize(5 * 1024 * 1024),           // 5MB limit
-        allowedMimeTypes(['image/jpeg', 'image/png'])
-    ]
-});
-
-// Process a file
-const result = await pipeline.process({
-    buffer: Buffer.from('...'),
-    filename: 'photo.jpg',
-    mimeType: 'image/jpeg',
-    size: 1024000
-});
-
-console.log(result.url);  // Output URL
-```
-
-### With Plugins
-
-```typescript
-import { createPipeline, localStorage } from './dist/index.js';
-import imagePlugin from './plugins/image-processor';
-
-const pipeline = createPipeline({
-    storage: localStorage('./uploads')
-})
-.use(imagePlugin);
-
-const result = await pipeline.process(file);
-```
-
----
-
-## Building for Production
-
-### Build Command
-
-```bash
-npm run build
-```
-
-### Output Files
-
-| File | Format | Usage |
-|------|--------|-------|
-| `dist/index.cjs` | CommonJS | `require('media-pipeline')` |
-| `dist/index.js` | ES Module | `import from 'media-pipeline'` |
-| `dist/index.d.ts` | TypeScript | Type definitions |
 
 ---
 
 ## Troubleshooting
 
-### Build Errors
+### Build fails
 
-If build fails, ensure:
-1. Node.js >= 18 is installed
-2. Dependencies are installed: `npm install`
-3. TypeScript is available: `npx tsc --version`
+- Confirm dependencies are installed with `npm install`
+- Confirm `tsup` is available through `node_modules/.bin`
+- Check for TypeScript errors in `src/`
 
-### Type Errors
+### Import shape looks wrong
 
-Run type checking:
-```bash
-npm run typecheck
-```
+- `require("media-pipeline")` resolves to `dist/index.js`
+- `import "media-pipeline"` resolves to `dist/index.mjs`
 
-### Test Failures
+### Test commands from older docs fail
 
-Run tests with verbose output:
-```bash
-npm test -- --verbose
-```
-
----
-
-## Related Documentation
-
-- [Environment Configuration](environment.md)
-- [API Reference](../api/endpoints.md)
-- [Module Documentation](../modules/module-map.md)
+Older docs referenced `npm run dev`, `npm run typecheck`, and `npm test`. Those commands are not defined in the current `package.json`.

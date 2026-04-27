@@ -1,220 +1,131 @@
 # Design Patterns
 
-Media Pipeline employs several well-established design patterns to achieve extensibility, modularity, and maintainability.
+Media Pipeline uses a handful of simple patterns rather than a large framework.
 
 ---
 
-## 1. Builder Pattern
+## 1. Factory Pattern
+
+**Location:** `src/core/pipeline.ts`
+
+`createPipeline(config)` hides the builder and executor internals behind a small public API.
+
+Benefits:
+
+- callers never construct core classes directly
+- the package can evolve internally without changing the entry point
+
+---
+
+## 2. Builder Pattern
 
 **Location:** `src/core/builder.ts`
 
-**Purpose:** Construct pipeline configurations through a fluent API.
+`PipelineBuilder` accumulates validators, processors, hooks, storage, and plugin metadata before any file is processed.
 
-**Implementation:**
-```typescript
-const pipeline = createPipeline({ storage: localStorage('./uploads') })
-    .use(validatorPlugin())
-    .use(processorPlugin());
-```
+Benefits:
 
-**Benefits:**
-- Separates construction from execution
-- Enables method chaining
-- Accumulates components (validators, processors, hooks)
-
----
-
-## 2. Plugin/Module Pattern
-
-**Location:** `src/core/plugin.ts`
-
-**Purpose:** Bundle related functionality (validators, processors, hooks) into reusable units.
-
-**Implementation:**
-```typescript
-const myPlugin = {
-    name: 'image-processor',
-    version: '1.0.0',
-    setup(builder) {
-        builder.addValidator(allowedMimeTypes(['image/png', 'image/jpeg']));
-        builder.addProcessor(imageTransformer);
-        builder.mergeHooks({ onStart: logStart });
-    }
-};
-```
-
-**Benefits:**
-- Encapsulation of related concerns
-- Version tracking
-- Reusability across projects
+- configuration is separated from execution
+- plugins can extend the pipeline incrementally
 
 ---
 
 ## 3. Strategy Pattern
 
-**Location:** `src/core/types.ts` (Storage interface)
+**Locations:** `src/types/pipeline.ts`, `src/storage/local.storage.ts`
 
-**Purpose:** Swap storage implementations without changing pipeline logic.
+Validators, processors, and storage all follow interface-shaped contracts:
 
-**Implementation:**
-```typescript
-// Local storage
-const storage = localStorage('./uploads');
+- validator strategy: `(ctx) => void | Promise<void>`
+- processor strategy: `(ctx) => PipelineContext | Promise<PipelineContext>`
+- storage strategy: `save(file) => Promise<PipelineResult>`
 
-// Cloud storage (hypothetical)
-const storage = s3Storage({ bucket: 'my-bucket' });
+Benefits:
 
-// Both implement Storage interface
-const pipeline = createPipeline({ storage });
-```
-
-**Benefits:**
-- Runtime storage selection
-- Testability (mock storage)
-- Easy cloud migration
+- behavior can be swapped without changing executor logic
+- custom implementations stay outside the core
 
 ---
 
-## 4. Chain of Responsibility
+## 4. Plugin Pattern
+
+**Locations:** `src/types/plugin.ts`, `src/utils/plugins.ts`, `src/core/pipeline.ts`
+
+Plugins group related validators, processors, hooks, or storage changes into reusable units.
+
+Supported forms:
+
+- object plugin with `name`, optional `version`, and `setup()`
+- function plugin with optional `displayName`
+
+Benefits:
+
+- reusable configuration bundles
+- traceable plugin metadata
+
+---
+
+## 5. Chain Of Responsibility
 
 **Location:** `src/core/executor.ts`
 
-**Purpose:** Pass context through sequential handlers.
+Validators and processors run in order. Each step decides whether the pipeline continues or fails.
 
-**Implementation:**
-```
-Input → Validator1 → Validator2 → ... → Processor1 → Processor2 → ... → Storage
-```
+Benefits:
 
-**Benefits:**
-- Each handler focuses on single responsibility
-- Handlers can be added/removed independently
-- Clear execution order
+- predictable sequencing
+- small focused handlers
+- fail-fast validation
 
 ---
 
-## 5. Hook/Event Listener Pattern
+## 6. Observer-Style Hooks
 
-**Location:** `src/core/hooks.ts`
+**Locations:** `src/types/hooks.ts`, `src/core/builder.ts`, `src/core/executor.ts`
 
-**Purpose:** Allow external code to react to pipeline lifecycle events.
+Lifecycle hooks let callers observe or extend the run at key checkpoints:
 
-**Implementation:**
-```typescript
-const pipeline = createPipeline({
-    hooks: {
-        onStart: (ctx) => console.log('Starting'),
-        onFinish: (result) => console.log('Done'),
-        onError: (err, ctx) => console.error(err)
-    }
-});
-```
+- `onStart`
+- `afterValidate`
+- `afterProcess`
+- `onFinish`
+- `onError`
 
-**Benefits:**
-- Cross-cutting concerns separated
-- Logging, metrics, analytics without modifying core logic
-- Error recovery mechanisms
+Benefits:
+
+- logging, metrics, and notifications stay outside core logic
+- multiple hooks can be merged in registration order
 
 ---
 
-## 6. Factory Pattern
-
-**Location:** `src/core/pipeline.ts`
-
-**Purpose:** Create pipeline instances without direct constructor calls.
-
-**Implementation:**
-```typescript
-const pipeline = createPipeline(config);
-// vs: new Pipeline(config)
-```
-
-**Benefits:**
-- Hides implementation details
-- Simplifies object creation
-- Enables future implementation changes
-
----
-
-## 7. Template Method Pattern
-
-**Location:** `src/core/executor.ts`
-
-**Purpose:** Define skeleton algorithm with customizable steps.
-
-**Implementation:**
-```
-onStart → validate → afterValidate → process → afterProcess → save → onFinish
-```
-
-**Benefits:**
-- Fixed execution order
-- Hookable at multiple points
-- Consistent behavior across uses
-
----
-
-## 8. Error Hierarchy
+## 7. Error Hierarchy
 
 **Location:** `src/utils/errors.ts`
 
-**Purpose:** Categorize and handle different error types.
+The library uses a small typed error family:
 
-**Implementation:**
-```
-PipelineError (base)
-├── ValidationError
-├── ProcessorError
-└── StorageError
+```text
+PipelineError
+|-- ValidationError
+|-- ProcessorError
+|-- StorageError
+`-- PluginError
 ```
 
-**Benefits:**
-- Type-safe error handling
-- Context-rich error information
-- Differentiated recovery strategies
+Benefits:
+
+- clearer failure categories
+- better `instanceof` handling in consuming apps
 
 ---
 
-## Pattern Interaction Diagram
+## 8. Trace Recording
 
-```
-                    ┌─────────────────┐
-                    │   createPipeline │ (Factory)
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │  PipelineBuilder │ (Builder)
-                    └────────┬────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-     ┌────────▼────┐  ┌──────▼─────┐  ┌────▼────────┐
-     │  Validators │  │ Processors │  │    Hooks    │
-     │  (Strategy) │  │   (Chain)  │  │  (Observer) │
-     └─────────────┘  └────────────┘  └─────────────┘
-              │              │              │
-              └──────────────┼──────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │    Executor     │ (Template Method)
-                    └────────┬────────┘
-                             │
-                    ┌────────▼────────┐
-                    │     Storage     │ (Strategy)
-                    └─────────────────┘
-```
+**Locations:** `src/core/tracer.ts`, `src/types/plugin-meta.ts`
 
----
+The executor emits structured events into `ctx.meta.trace`.
 
-## Summary
+Benefits:
 
-| Pattern | File | Purpose |
-|---------|------|---------|
-| Builder | builder.ts | Fluent configuration |
-| Plugin | plugin.ts | Reusable extensions |
-| Strategy | types.ts (Storage) | Swappable backends |
-| Chain of Responsibility | executor.ts | Sequential processing |
-| Hook/Observer | hooks.ts | Lifecycle events |
-| Factory | pipeline.ts | Instance creation |
-| Template Method | executor.ts | Fixed execution skeleton |
-| Error Hierarchy | errors.ts | Typed error handling |
+- lightweight observability
+- no external tracing dependency

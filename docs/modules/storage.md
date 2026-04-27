@@ -1,154 +1,70 @@
 # Storage Module
 
-**File:** `src/storage/local.storage.ts`
+**Files:** `src/storage/local.storage.ts`, `src/utils/file.ts`
 
-## Overview
+## Purpose
 
-Provides a local filesystem storage implementation for the pipeline.
-
----
-
-## Responsibilities
-
-1. **File Persistence** - Save files to local filesystem
-2. **Directory Creation** - Create upload directories as needed
-3. **Result Generation** - Return storage location and metadata
+The built-in storage layer persists files to the local filesystem and returns a normalized `PipelineResult`.
 
 ---
 
-## Public API
+## `localStorage(basePath)`
 
-### `localStorage(basePath: string): Storage`
+Returns a `Storage` implementation with a single `save(file)` method.
 
-Creates a local storage instance.
+### Save flow
 
-**Parameters:**
-- `basePath` - Directory path where files will be saved
-
-**Returns:**
-- `Storage` interface implementation
+1. sanitize `file.filename`
+2. generate a unique stored name from the sanitized filename and MIME type
+3. create the base directory if needed
+4. verify the directory is writable
+5. write the file buffer
+6. return a result with local metadata
 
 ---
 
-## Implementation Details
+## Result Shape
 
-```typescript
-function localStorage(basePath: string): Storage {
-    return {
-        async save(file: PipelineFile): Promise<PipelineResult> {
-            const filePath = path.join(basePath, file.filename);
-            
-            await fs.mkdir(basePath, { recursive: true });
-            await fs.writeFile(filePath, file.buffer);
-            
-            return {
-                url: filePath,
-                path: filePath,
-                size: file.size,
-                metadata: {},
-                meta: {
-                    plugins: [],
-                    trace: [],
-                },
-            };
-        },
-    };
+The built-in adapter returns:
+
+```ts
+{
+  url: `file://${absolutePath}`,
+  path: filePath,
+  size: file.size,
+  originalName,
+  storedName,
+  mimeType: file.mimeType,
+  provider: "local",
+  metadata: {},
+  meta: {
+    plugins: [],
+    trace: [],
+  },
 }
 ```
 
----
-
-## Usage
-
-```typescript
-import { createPipeline, localStorage } from 'media-pipeline';
-
-const pipeline = createPipeline({
-    storage: localStorage('./uploads')
-});
-
-const result = await pipeline.process({
-    buffer: Buffer.from('file content'),
-    filename: 'document.pdf',
-    mimeType: 'application/pdf',
-    size: 1024
-});
-
-console.log(result.url);  // "./uploads/document.pdf"
-```
+The executor later replaces `meta` with the runtime context meta object.
 
 ---
 
-## Code Reference
+## Helper Functions
 
-```typescript
-// filepath: src/storage/local.storage.ts
-import fs from "fs/promises";
-import path from "path";
-import { PipelineFile, PipelineResult, Storage } from "../core/types";
+### `sanitizeFilename(filename)`
 
-export function localStorage(basePath: string): Storage {
-    return {
-        async save(file: PipelineFile): Promise<PipelineResult> {
-            const filePath = path.join(basePath, file.filename);
+- replaces path separators and other unsafe characters with `-`
+- removes null bytes
+- trims whitespace
+- falls back to `"file"` if nothing usable remains
 
-            await fs.mkdir(basePath, { recursive: true });
-            await fs.writeFile(filePath, file.buffer);
+### `generateStoredName(originalName, mimeType)`
 
-            return {
-                url: filePath,
-                path: filePath,
-                size: file.size,
-                metadata: {},
-                meta: {
-                    plugins: [], 
-                    trace: [],
-                },
-            };
-        },
-    };
-}
-```
+- preserves a safe original extension when possible
+- otherwise infers a small set of extensions from MIME type
+- prefixes the final name with a timestamp and random suffix
 
 ---
 
-## Extending Storage
+## Error Behavior
 
-To implement custom storage (e.g., S3, GCS):
-
-```typescript
-import { Storage, PipelineFile, PipelineResult } from 'media-pipeline';
-
-const s3Storage = (config: S3Config): Storage => ({
-    async save(file: PipelineFile): Promise<PipelineResult> {
-        const key = `uploads/${file.filename}`;
-        await s3Client.upload({
-            Bucket: config.bucket,
-            Key: key,
-            Body: file.buffer
-        });
-        
-        return {
-            url: `https://${config.bucket}.s3.amazonaws.com/${key}`,
-            path: key,
-            size: file.size,
-            metadata: {},
-            meta: { plugins: [], trace: [] }
-        };
-    }
-});
-
-const pipeline = createPipeline({
-    storage: s3Storage({ bucket: 'my-bucket' })
-});
-```
-
----
-
-## Related Modules
-
-| Module | Relationship |
-|--------|--------------|
-| `types.ts` | Defines Storage interface |
-| `pipeline.ts` | Uses storage from config |
-| `executor.ts` | Calls storage.save() |
+If the directory is not writable, `localStorage()` throws `StorageError` with the original error message in `details.originalError`.

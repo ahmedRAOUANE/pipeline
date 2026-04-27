@@ -1,295 +1,207 @@
-# Request & Response Schemas
+# Request And Response Schemas
 
 ## Overview
 
-This document defines the data schemas for pipeline inputs, outputs, and internal structures.
+This document captures the current runtime shapes used by the pipeline.
 
 ---
 
-## PipelineFile (Input)
+## `PipelineFile`
 
-Represents a file entering the pipeline.
-
-```typescript
+```ts
 type PipelineFile = {
-    buffer: Buffer;      // File content as Buffer
-    filename: string;   // Original filename
-    mimeType: string;   // MIME type (e.g., "image/jpeg")
-    size: number;       // File size in bytes
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+  size: number;
 };
 ```
 
-**Example:**
+Example:
+
 ```json
 {
-    "buffer": "<Buffer 89 50 4e 47 ...>",
-    "filename": "photo.jpg",
-    "mimeType": "image/jpeg",
-    "size": 204800
+  "buffer": "<Buffer ...>",
+  "filename": "photo.jpg",
+  "mimeType": "image/jpeg",
+  "size": 204800
 }
 ```
 
 ---
 
-## PipelineContext (Internal)
+## `PipelineContext`
 
-Internal context passed between pipeline stages.
-
-```typescript
+```ts
 type PipelineContext = {
-    file: PipelineFile;
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
+  file: PipelineFile;
+  metadata: Record<string, any>;
+  meta: PipelineMeta;
 };
 ```
 
-**Properties:**
-- `file` - Current file state (may be modified by processors)
-- `metadata` - User-defined metadata accumulated during processing
-- `meta` - Pipeline execution metadata
+This object is created at the start of each `process()` call and flows through validators, processors, hooks, and tracing.
 
 ---
 
-## PipelineMeta (Internal)
+## `PluginMeta`
 
-Metadata about pipeline execution.
-
-```typescript
-type PipelineMeta = {
-    pluginTrace: PluginTraceEvent[];
-    startTime: number;
-    endTime?: number;
+```ts
+type PluginMeta = {
+  name: string;
+  version?: string;
+  priority?: number;
 };
 ```
 
-**Properties:**
-- `pluginTrace` - Array of trace events from plugins
-- `startTime` - Unix timestamp when processing started
-- `endTime` - Unix timestamp when processing finished
-
 ---
 
-## PluginTraceEvent
+## `PluginTraceEvent`
 
-Event recorded during plugin execution.
-
-```typescript
+```ts
 type PluginTraceEvent = {
-    plugin: string;
-    event: string;
-    timestamp: number;
-    data?: Record<string, any>;
+  plugin: string;
+  stage: "validator" | "processor" | "hook" | "storage";
+  message: string;
+  timestamp: number;
+  duration?: number;
 };
-```
-
-**Example:**
-```json
-{
-    "plugin": "image-processor",
-    "event": "resize",
-    "timestamp": 1699876543000,
-    "data": { "width": 800, "height": 600 }
-}
 ```
 
 ---
 
-## PipelineResult (Output)
+## `PipelineMeta`
 
-Result returned after successful pipeline processing.
+```ts
+type PipelineMeta = {
+  plugins: PluginMeta[];
+  trace: PluginTraceEvent[];
+};
+```
 
-```typescript
+Notes:
+
+- `plugins` is copied from the builder into each process run
+- `trace` starts empty for each run and is filled by the executor
+
+---
+
+## `PipelineResult`
+
+```ts
+type PipelineProvider = "local";
+
 type PipelineResult = {
-    url: string;        // Public URL to access the file
-    path: string;       // Storage path
-    size: number;       // Final file size in bytes
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
+  url: string;
+  path: string;
+  size: number;
+  metadata: Record<string, any>;
+  meta: PipelineMeta;
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  provider: PipelineProvider;
 };
 ```
 
-**Example:**
+Example from the built-in local storage adapter:
+
 ```json
 {
-    "url": "https://example.com/uploads/photo.jpg",
-    "path": "./uploads/photo.jpg",
-    "size": 153600,
-    "metadata": {
-        "processedAt": "2023-11-13T10:00:00Z",
-        "resized": true
-    },
-    "meta": {
-        "pluginTrace": [],
-        "startTime": 1699876540000,
-        "endTime": 1699876543000
-    }
+  "url": "file:///abs/path/uploads/1714210000000-abc123.jpg",
+  "path": "./uploads/1714210000000-abc123.jpg",
+  "size": 204800,
+  "metadata": {},
+  "meta": {
+    "plugins": [],
+    "trace": []
+  },
+  "originalName": "photo.jpg",
+  "storedName": "1714210000000-abc123.jpg",
+  "mimeType": "image/jpeg",
+  "provider": "local"
 }
 ```
 
 ---
 
-## PipelineConfig
+## `Storage`
 
-Configuration for creating a pipeline.
-
-```typescript
-type PipelineConfig = {
-    validators?: Validator[];
-    processors?: Processor[];
-    storage: Storage;
-    hooks?: PipelineHooks;
+```ts
+type Storage = {
+  save(file: PipelineFile): Promise<PipelineResult>;
 };
 ```
 
-**Properties:**
-- `validators` - Optional array of validators
-- `processors` - Optional array of processors
-- `storage` - Required storage backend
-- `hooks` - Optional lifecycle hooks
-
 ---
 
-## Validator
+## Validator And Processor Contracts
 
-Function that validates the pipeline context.
-
-```typescript
+```ts
 type Validator = (ctx: PipelineContext) => void | Promise<void>;
-```
 
-**Behavior:**
-- Throws `ValidationError` if validation fails
-- Synchronous or async
-
----
-
-## Processor
-
-Function that transforms the file.
-
-```typescript
 type Processor = (ctx: PipelineContext) => PipelineContext | Promise<PipelineContext>;
 ```
 
-**Behavior:**
-- Receives and returns modified context
-- Can modify `ctx.file` and `ctx.metadata`
-- Synchronous or async
-
 ---
 
-## Storage
+## Hook Contract
 
-Interface for file storage backends.
+The hook type is defined internally in `src/types/hooks.ts`:
 
-```typescript
-type Storage = {
-    save(file: PipelineFile): Promise<PipelineResult>;
-};
-```
-
-**Methods:**
-- `save(file)` - Persist file and return result
-
----
-
-## PipelineHooks
-
-Lifecycle hook functions.
-
-```typescript
+```ts
 type PipelineHooks = {
-    onStart?: (ctx: PipelineContext) => void | Promise<void>;
-    afterValidate?: (ctx: PipelineContext) => void | Promise<void>;
-    afterProcess?: (ctx: PipelineContext) => void | Promise<void>;
-    onError?: (error: PipelineError | Error, ctx: PipelineContext) => void | Promise<void>;
-    onFinish?: (result: PipelineResult, ctx: PipelineContext) => void | Promise<void>;
+  onStart?: (ctx: PipelineContext) => void | Promise<void>;
+  afterValidate?: (ctx: PipelineContext) => void | Promise<void>;
+  afterProcess?: (ctx: PipelineContext) => void | Promise<void>;
+  onError?: (error: PipelineError | Error, ctx: PipelineContext) => void | Promise<void>;
+  onFinish?: (result: PipelineResult, ctx: PipelineContext) => void | Promise<void>;
 };
 ```
 
-**Hooks:**
-- `onStart` - Called before validation
-- `afterValidate` - Called after validation passes
-- `afterProcess` - Called after all processors complete
-- `onError` - Called when an error occurs
-- `onFinish` - Called after successful completion
-
 ---
 
-## Error Response
+## Plugin Contracts
 
-When an error occurs, the pipeline throws an error.
-
-```typescript
-// ValidationError
-{
-    "name": "ValidationError",
-    "message": "File too large",
-    "code": "VALIDATION_ERROR",
-    "details": {
-        "size": 10485760,
-        "limit": 5242880
-    }
-}
-
-// ProcessorError
-{
-    "name": "ProcessorError",
-    "message": "Image processing failed",
-    "code": "PROCESSOR_ERROR",
-    "details": {
-        "processor": "image-resizer"
-    }
-}
-
-// StorageError
-{
-    "name": "StorageError",
-    "message": "Failed to write file",
-    "code": "STORAGE_ERROR",
-    "details": {
-        "path": "./uploads/photo.jpg"
-    }
-}
-```
-
----
-
-## Plugin Schema
-
-### PipelinePlugin
-
-```typescript
+```ts
 type PipelinePlugin = {
-    name: string;           // Unique plugin identifier
-    version?: string;       // Semantic version
-    setup: (builder: PipelineBuilder) => void;
+  name: string;
+  version?: string;
+  setup: (builder: PipelineBuilder) => void;
 };
 ```
 
-### PipelinePluginSetup
+Function plugins are also accepted at runtime:
 
-```typescript
-type PipelinePluginSetup = (builder: PipelineBuilder) => void;
+```ts
+type PipelinePluginFunction = ((builder: PipelineBuilder) => void) & {
+  displayName?: string;
+};
 ```
 
 ---
 
-## Type Relationships
+## Error Shape
 
+```ts
+type PipelineErrorCode =
+  | "VALIDATION_ERROR"
+  | "PROCESSOR_ERROR"
+  | "STORAGE_ERROR"
+  | "UNKNOWN_ERROR"
+  | "PLUGIN_ERROR";
 ```
-PipelineFile (input)
-       │
-       ▼
-PipelineContext (internal)
-       │
-       ├─► Validator ──throws──► ValidationError
-       │
-       ├─► Processor ──modifies──► PipelineContext
-       │
-       ▼
-Storage.save()
-       │
-       ▼
-PipelineResult (output)
+
+Example:
+
+```json
+{
+  "name": "ValidationError",
+  "message": "File too large",
+  "code": "VALIDATION_ERROR",
+  "details": {
+    "size": 10485760,
+    "limit": 5242880
+  }
+}
 ```

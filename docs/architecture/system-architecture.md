@@ -1,199 +1,129 @@
 # System Architecture
 
-## High-Level Architecture
+## Overview
 
-Media Pipeline follows a **layered, plugin-based architecture** with clear separation of concerns:
+Media Pipeline uses a small layered architecture built around three ideas:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Client Code                            │
-│                  (createPipeline().use())                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Pipeline Layer                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │  Pipeline   │  │   Builder   │  │     Executor        │ │
-│  │   Factory   │──▶│   (DSL)     │──▶│   (Orchestrator)   │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Processing Layer                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ Validators  │──▶│ Processors  │──▶│      Storage       │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Hook System                              │
-│  onStart → afterValidate → afterProcess → onFinish         │
-│       ↘─────────────────────────────────────↗              │
-│                    onError (on exception)                   │
-└─────────────────────────────────────────────────────────────┘
+1. configuration is collected first
+2. execution happens later through a single orchestrator
+3. storage stays behind an interface
+
+---
+
+## High-Level Layout
+
+```text
+client code
+  -> createPipeline(config)
+  -> .use(plugin)
+  -> .process(file)
+
+core layer
+  -> PipelineBuilder
+  -> executePipeline()
+  -> trace()
+
+extension layer
+  -> validators
+  -> processors
+  -> hooks
+  -> storage
+
+type and utility layer
+  -> src/types/*
+  -> utils/errors.ts
+  -> utils/file.ts
+  -> utils/plugins.ts
 ```
 
 ---
 
-## Core Components
+## Main Components
 
-### 1. Pipeline Factory (`pipeline.ts`)
+### `src/core/pipeline.ts`
 
-**Responsibility:** Creates pipeline instances and manages plugin registration.
+- creates the pipeline instance
+- normalizes plugins
+- throws `PluginError` for invalid plugin inputs
+- prepares a fresh per-run context before delegating to the executor
 
-**Public API:**
-- `createPipeline(config)` - Factory function returning pipeline instance
+### `src/core/builder.ts`
 
-**Internal Logic:**
-1. Instantiates `PipelineBuilder` with config
-2. Returns object with `use()` and `process()` methods
-3. Handles plugin normalization (function vs object form)
+- stores validators, processors, hooks, storage, and plugin metadata
+- merges hook handlers in registration order
 
----
+### `src/core/executor.ts`
 
-### 2. Pipeline Builder (`builder.ts`)
+- runs the lifecycle in sequence
+- records trace events
+- invokes `onError` before re-throwing failures
 
-**Responsibility:** Accumulates pipeline components during configuration phase.
+### `src/storage/local.storage.ts`
 
-**State:**
-- `validators[]` - Array of validator functions
-- `processors[]` - Array of processor functions
-- `hooks{}` - Lifecycle hook functions
-- `storage` - Storage backend instance
-- `meta` - Plugin metadata and trace
+- built-in storage implementation
+- sanitizes the incoming filename
+- generates a unique stored name
+- ensures the target directory exists and is writable
 
-**Key Methods:**
-- `addValidator(v)` - Register validator
-- `addProcessor(p)` - Register processor
-- `setStorage(s)` - Set storage backend
-- `mergeHooks(h)` - Merge hook functions (chaining)
-- `registerPlugin(m)` - Track plugin metadata
+### `src/types/*`
+
+- separates pipeline, hook, plugin, and meta types from the execution code
 
 ---
 
-### 3. Pipeline Executor (`executor.ts`)
+## Execution Sequence
 
-**Responsibility:** Orchestrates the actual file processing flow.
-
-**Execution Flow:**
-```
-onStart → [validators] → afterValidate → [processors] → afterProcess → storage.save() → onFinish
-                                    ↓
-                              onError (on exception)
-```
-
-**Key Features:**
-- Sequential validator execution (fail-fast)
-- Sequential processor execution (context passes through)
-- Single storage save at end
-- Comprehensive error handling with hook callbacks
-
----
-
-### 4. Plugin System (`plugin.ts`, `plugin-meta.ts`)
-
-**Responsibility:** Enables reusable, composable pipeline extensions.
-
-**Plugin Structure:**
-```typescript
-type PipelinePlugin = {
-  name: string;
-  version?: string;
-  setup: (builder: PipelineBuilder) => void;
-};
+```text
+process(file)
+  -> onStart
+  -> validators[]
+  -> afterValidate
+  -> processors[]
+  -> afterProcess
+  -> storage.save()
+  -> onFinish
 ```
 
-**Plugin Capabilities:**
-- Add validators via `builder.addValidator()`
-- Add processors via `builder.addProcessor()`
-- Register hooks via `builder.mergeHooks()`
-- Track metadata for traceability
+On failure:
 
----
-
-### 5. Hook System (`hooks.ts`)
-
-**Responsibility:** Provides lifecycle extension points.
-
-| Hook | Timing | Parameters |
-|------|--------|------------|
-| `onStart` | Before validation | `ctx: PipelineContext` |
-| `afterValidate` | After all validators pass | `ctx: PipelineContext` |
-| `afterProcess` | After all processors complete | `ctx: PipelineContext` |
-| `onFinish` | After successful storage | `result, ctx` |
-| `onError` | On any exception | `error, ctx` |
-
----
-
-### 6. Storage Abstraction (`types.ts`, `local.storage.ts`)
-
-**Responsibility:** Decouple file persistence from pipeline logic.
-
-**Storage Interface:**
-```typescript
-type Storage = {
-  save(file: PipelineFile): Promise<PipelineResult>;
-};
-```
-
-**Current Implementation:**
-- `localStorage(basePath)` - Filesystem storage
-
-**Extensibility:** Implement `Storage` interface for cloud storage (S3, GCS, etc.)
-
----
-
-## Data Flow Architecture
-
-```
-┌──────────┐     ┌────────────┐     ┌───────────┐     ┌─────────┐     ┌─────────┐
-│  Input   │────▶│  Validate  │────▶│  Process  │────▶│  Store  │────▶│ Output  │
-│  File    │     │  (array)   │     │  (array)  │     │         │     │ Result  │
-└──────────┘     └────────────┘     └───────────┘     └─────────┘     └─────────┘
-                      │                   │               │
-                      ▼                   ▼               ▼
-                 [onStart]          [afterValidate]   [onFinish]
-                 [afterValidate]    [afterProcess]    [onError]
+```text
+throw
+  -> onError
+  -> re-throw original error
 ```
 
 ---
 
-## Module Dependencies
+## Data Ownership
 
-```
-index.ts
-├── core/pipeline.ts
-│   ├── core/builder.ts
-│   │   ├── core/types.ts
-│   │   ├── core/hooks.ts
-│   │   └── core/plugin-meta.ts
-│   ├── core/executor.ts
-│   │   ├── core/types.ts
-│   │   ├── core/hooks.ts
-│   │   └── core/tracer.ts
-│   ├── core/plugin.ts
-│   └── core/plugin-meta.ts
-├── storage/local.storage.ts
-│   └── core/types.ts
-├── validators/*.ts
-│   ├── core/types.ts
-│   └── utils/errors.ts
-├── processors/identity.processor.ts
-│   └── core/types.ts
-└── utils/errors.ts
-```
+- `PipelineBuilder` owns reusable configuration
+- `PipelineContext` owns per-run mutable state
+- `PipelineResult` owns persisted-file output data
+- `PipelineMeta.trace` is owned by the current process run
 
 ---
 
-## Design Decisions
+## Public Surface vs Internal Surface
 
-| Decision | Rationale |
-|----------|-----------|
-| Sequential validators | Fail-fast behavior; simpler error handling |
-| Sequential processors | Context dependencies; predictable ordering |
-| Storage at end | All transformations complete before persistence |
-| Hook chaining | Multiple plugins can contribute to same hook |
-| Plugin metadata | Traceability and debugging support |
+### Public
+
+- `createPipeline`
+- `localStorage`
+- built-in validators and processor
+- selected types and error classes from `src/index.ts`
+
+### Internal
+
+- `executePipeline`
+- `trace`
+- `isPipelinePlugin`
+- most type modules in `src/types/`
+
+---
+
+## Current Architectural Constraints
+
+- pipeline input is buffer-only
+- execution is sequential
+- only one built-in storage provider exists
+- custom storage is structurally supported, but `PipelineResult.provider` is currently typed as `"local"`

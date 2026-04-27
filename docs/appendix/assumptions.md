@@ -1,122 +1,51 @@
 # Assumptions
 
-## Design Assumptions
+## Runtime Assumptions
 
-### 1. Node.js Environment
-
-- Assumes Node.js >= 18.0.0
-- Uses ES2020 features (optional chaining, nullish coalescing)
-- Relies on Node.js built-in modules (fs, path, buffer)
-
-### 2. File Processing
-
-- Files are provided as `Buffer` objects
-- Entire file is loaded into memory
-- No streaming support (current version)
-
-### 3. Synchronous Validation
-
-- Validators are expected to be synchronous or return immediately
-- Async validators are supported but not optimized for
-
-### 4. Single Pipeline Instance
-
-- Each `createPipeline()` call creates a new instance
-- Pipelines are not shared across requests by default
-
-### 5. Error Handling
-
-- Errors are thrown and must be caught by caller
-- No automatic retry or recovery
+- The library runs in Node.js, not the browser
+- Files enter the pipeline as `Buffer` objects
+- Validation, processing, and storage happen sequentially
+- Consumers are comfortable handling async functions and thrown errors
 
 ---
 
-## Usage Assumptions
+## Current Implementation Assumptions
 
-### 1. Trusted Input
-
-- Pipeline assumes input files are from trusted sources
-- No built-in sanitization of filenames or content
-
-### 2. Sufficient Storage
-
-- Storage backend has sufficient space for files
-- No built-in storage quota enforcement
-
-### 3. Valid Configuration
-
-- Pipeline config is valid at creation time
-- No runtime validation of storage or plugin availability
-
-### 4. Proper Cleanup
-
-- Caller is responsible for cleaning up resources
-- No automatic cleanup on process exit
+- `createPipeline()` is called with a valid `storage` implementation
+- Plugin objects passed to `.use()` have a non-empty `name` and a `setup()` function
+- Function plugins may be unnamed; in that case the pipeline falls back to `displayName`, `function.name`, or `"anonymous-plugin"`
+- Each `process()` call gets a fresh `trace` array and a copied plugin metadata list
+- The built-in storage adapter writes to a writable local directory
 
 ---
 
-## Performance Assumptions
+## File Handling Assumptions
 
-### 1. Moderate File Sizes
-
-- Files are typically under 100MB
-- No optimization for very large files
-
-### 2. Low to Medium Throughput
-
-- Single-threaded processing is acceptable
-- No need for horizontal scaling in basic use cases
-
-### 3. In-Memory Processing
-
-- File buffers remain in memory during processing
-- No memory-mapped file support
+- The current pipeline is buffer-based and loads the whole file into memory
+- `localStorage()` sanitizes the incoming filename before generating a stored filename
+- `localStorage()` generates a unique persisted filename instead of writing the original filename directly
+- No streaming support is built in yet
 
 ---
 
-## Security Assumptions
+## Error Handling Assumptions
 
-### 1. Input Validation
-
-- Caller validates input before passing to pipeline
-- Pipeline does not sanitize malicious input
-
-### 2. Storage Security
-
-- Storage backend handles its own security
-- No encryption at rest (must be handled by storage)
-
-### 3. Access Control
-
-- No built-in access control or authentication
-- Must be implemented at application level
+- Errors are propagated back to the caller after `onError` runs
+- The core library provides typed error classes, but it does not automatically wrap every arbitrary processor failure into `ProcessorError`
+- Hook failures inside `onError` are logged to `console.error` and do not replace the original thrown error
 
 ---
 
-## Compatibility Assumptions
+## Packaging Assumptions
 
-### 1. TypeScript Usage
-
-- Primary audience uses TypeScript
-- Full type definitions are required
-
-### 2. Module Formats
-
-- Both CommonJS and ESM outputs are needed
-- Dual package support required
-
-### 3. Browser Compatibility
-
-- Not designed for browser use
-- Server-side only
+- Consumers may use either `require()` or `import`
+- The package root is the supported public entry point
+- Not every internal type is re-exported from `src/index.ts`
 
 ---
 
-## Future Considerations
+## Known Design Tensions
 
-These assumptions may change in future versions:
-
-- Streaming support for large files
-- Built-in retry and error recovery
-- Pipeline composition and reuse
-- Enhanced security features
+- The `Storage` interface is generic enough for custom backends, but `PipelineResult.provider` is currently narrowed to `"local"`
+- The repository includes `tests/`, but there is no official npm-driven automated test workflow yet
+- The root `README.md` is older than the implementation and may lag the docs in `docs/`

@@ -2,211 +2,52 @@
 
 **File:** `src/utils/errors.ts`
 
-## Overview
-
-Defines a hierarchy of error classes for different pipeline failure scenarios.
-
----
-
 ## Error Hierarchy
 
-```
-Error
-  │
-  └── PipelineError (base class)
-        │
-        ├── ValidationError
-        │
-        ├── ProcessorError
-        │
-        └── StorageError
+```text
+PipelineError
+|-- ValidationError
+|-- ProcessorError
+|-- StorageError
+`-- PluginError
 ```
 
 ---
 
 ## Error Codes
 
-```typescript
+```ts
 type PipelineErrorCode =
-    | "VALIDATION_ERROR"
-    | "PROCESSOR_ERROR"
-    | "STORAGE_ERROR"
-    | "UNKNOWN_ERROR";
+  | "VALIDATION_ERROR"
+  | "PROCESSOR_ERROR"
+  | "STORAGE_ERROR"
+  | "UNKNOWN_ERROR"
+  | "PLUGIN_ERROR";
 ```
 
 ---
 
-## PipelineError
+## Notes On Usage
 
-Base error class for all pipeline errors.
-
-```typescript
-class PipelineError extends Error {
-    public code: PipelineErrorCode;
-    public details: Record<string, unknown> | undefined;
-    
-    constructor(
-        message: string,
-        code: PipelineErrorCode = "UNKNOWN_ERROR",
-        details?: Record<string, unknown>
-    );
-}
-```
-
-**Properties:**
-- `message` - Error message
-- `code` - Error code for programmatic handling
-- `details` - Additional error context
+- `ValidationError` is used by the built-in validators
+- `StorageError` is used by the built-in local storage adapter
+- `PluginError` is used during invalid plugin registration
+- `ProcessorError` is exported for consumers and custom processors, but the core executor does not automatically wrap every thrown processor failure into `ProcessorError`
 
 ---
 
-## ValidationError
+## Common Caller Pattern
 
-Thrown when file validation fails.
-
-```typescript
-class ValidationError extends PipelineError {
-    constructor(message: string, details?: Record<string, any>);
-}
-// code: "VALIDATION_ERROR"
-```
-
-**Common Usage:**
-```typescript
-throw new ValidationError("File too large", {
-    size: ctx.file.size,
-    limit: 5 * 1024 * 1024
-});
-```
-
----
-
-## ProcessorError
-
-Thrown when a processor fails.
-
-```typescript
-class ProcessorError extends PipelineError {
-    constructor(message: string, details?: Record<string, any>);
-}
-// code: "PROCESSOR_ERROR"
-```
-
----
-
-## StorageError
-
-Thrown when storage operation fails.
-
-```typescript
-class StorageError extends PipelineError {
-    constructor(message: string, details?: Record<string, any>);
-}
-// code: "STORAGE_ERROR"
-```
-
----
-
-## Code Reference
-
-```typescript
-// filepath: src/utils/errors.ts
-export type PipelineErrorCode =
-    | "VALIDATION_ERROR"
-    | "PROCESSOR_ERROR"
-    | "STORAGE_ERROR"
-    | "UNKNOWN_ERROR";
-
-export class PipelineError extends Error {
-    public code: PipelineErrorCode;
-    public details: Record<string, unknown> | undefined;
-
-    constructor(
-        message: string,
-        code: PipelineErrorCode = "UNKNOWN_ERROR",
-        details?: Record<string, unknown>
-    ) {
-        super(message);
-        this.name = "PipelineError";
-        this.code = code;
-        this.details = details;
-    }
-}
-
-export class ValidationError extends PipelineError {
-    constructor(message: string, details?: Record<string, any>) {
-        super(message, "VALIDATION_ERROR", details);
-        this.name = "ValidationError";
-    }
-}
-
-export class ProcessorError extends PipelineError {
-    constructor(message: string, details?: Record<string, any>) {
-        super(message, "PROCESSOR_ERROR", details);
-        this.name = "ProcessorError";
-    }
-}
-
-export class StorageError extends PipelineError {
-    constructor(message: string, details?: Record<string, any>) {
-        super(message, "STORAGE_ERROR", details);
-        this.name = "StorageError";
-    }
-}
-```
-
----
-
-## Error Handling
-
-### Catching Specific Errors
-
-```typescript
-import { ValidationError, ProcessorError, StorageError } from 'media-pipeline';
-
+```ts
 try {
-    const result = await pipeline.process(file);
+  await pipeline.process(file);
 } catch (err) {
-    if (err instanceof ValidationError) {
-        console.log('Validation failed:', err.message);
-        console.log('Details:', err.details);
-    } else if (err instanceof ProcessorError) {
-        console.log('Processing failed:', err.message);
-    } else if (err instanceof StorageError) {
-        console.log('Storage failed:', err.message);
-    } else {
-        console.log('Unknown error:', err);
-    }
+  if (err instanceof ValidationError) {
+    // validation issue
+  } else if (err instanceof StorageError) {
+    // persistence issue
+  } else if (err instanceof PluginError) {
+    // registration issue
+  }
 }
 ```
-
-### Error Code Handling
-
-```typescript
-import { PipelineError, PipelineErrorCode } from 'media-pipeline';
-
-switch (err.code) {
-    case 'VALIDATION_ERROR':
-        // Handle validation
-        break;
-    case 'PROCESSOR_ERROR':
-        // Handle processor
-        break;
-    case 'STORAGE_ERROR':
-        // Handle storage
-        break;
-    default:
-        // Handle unknown
-}
-```
-
----
-
-## Related Modules
-
-| Module | Relationship |
-|--------|--------------|
-| `validators.ts` | Throws ValidationError |
-| `processors/` | Throws ProcessorError |
-| `storage/` | Throws StorageError |
-| `executor.ts` | Catches and re-throws errors |

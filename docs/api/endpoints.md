@@ -2,287 +2,236 @@
 
 ## Overview
 
-This document provides a complete API reference for the Media Pipeline library.
+This document describes the public package surface exported from `src/index.ts` and the runtime behavior behind it.
 
 ---
 
-## Main Exports
+## Public Exports
 
-| Export | Type | Description |
-|--------|------|-------------|
-| `createPipeline` | Function | Create a new pipeline instance |
-| `localStorage` | Function | Create local filesystem storage |
-| `maxSize` | Function | Create size validator |
-| `allowedMimeTypes` | Function | Create MIME type validator |
-| `identityProcessor` | Constant | No-op processor |
-| `PipelineBuilder` | Class | Pipeline builder class |
-| `PipelinePlugin` | Type | Plugin type definition |
+### Functions and values
+
+| Export | Kind | Notes |
+|--------|------|-------|
+| `createPipeline` | function | Creates a pipeline instance with `.use()` and `.process()` |
+| `localStorage` | function | Built-in filesystem storage adapter |
+| `maxSize` | function | Built-in size validator factory |
+| `allowedMimeTypes` | function | Built-in MIME validator factory |
+| `identityProcessor` | value | Built-in no-op processor |
+| `PipelineBuilder` | class | Exported mainly for plugin authors |
+
+### Types exported from the package root
+
+| Export | Kind |
+|--------|------|
+| `PipelineFile` | type |
+| `PipelineResult` | type |
+| `Processor` | type |
+| `Validator` | type |
+| `Storage` | type |
+| `PipelineContext` | type |
+| `PipelinePlugin` | type |
+| `PipelineErrorCode` | type |
+
+### Error classes
+
+| Export | Kind |
+|--------|------|
+| `PipelineError` | class |
+| `ValidationError` | class |
+| `ProcessorError` | class |
+| `StorageError` | class |
+| `PluginError` | class |
 
 ---
 
-## Functions
+## `createPipeline(config)`
 
-### `createPipeline(config: PipelineConfig): Pipeline`
+Creates a pipeline instance.
 
-Creates a new pipeline instance.
+### Configuration shape
 
-**Parameters:**
-```typescript
-type PipelineConfig = {
-    validators?: Validator[];
-    processors?: Processor[];
-    storage: Storage;
-    hooks?: PipelineHooks;
-};
-```
+`PipelineConfig` is used internally by the library, but it is not currently exported from the package root. The runtime shape is:
 
-**Returns:**
-```typescript
+```ts
 {
-    use(plugin: PipelinePlugin | PipelinePluginSetup): this;
-    process(file: PipelineFile): Promise<PipelineResult>;
-}
-```
-
-**Example:**
-```typescript
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    validators: [maxSize(5 * 1024 * 1024)],
-    processors: [imageProcessor],
-    hooks: { onFinish: logResult }
-});
-```
-
----
-
-### `localStorage(basePath: string): Storage`
-
-Creates a local filesystem storage backend.
-
-**Parameters:**
-- `basePath` - Directory path for file storage
-
-**Returns:** `Storage` interface
-
-**Example:**
-```typescript
-const storage = localStorage('./uploads');
-```
-
----
-
-### `maxSize(limit: number): Validator`
-
-Creates a file size validator.
-
-**Parameters:**
-- `limit` - Maximum file size in bytes
-
-**Returns:** `Validator` function
-
-**Example:**
-```typescript
-const validator = maxSize(5 * 1024 * 1024); // 5MB
-```
-
----
-
-### `allowedMimeTypes(types: string[]): Validator`
-
-Creates a MIME type validator.
-
-**Parameters:**
-- `types` - Array of allowed MIME types
-
-**Returns:** `Validator` function
-
-**Example:**
-```typescript
-const validator = allowedMimeTypes(['image/png', 'image/jpeg']);
-```
-
----
-
-## Pipeline Instance Methods
-
-### `pipeline.use(plugin): this`
-
-Register a plugin with the pipeline.
-
-**Parameters:**
-```typescript
-// Form 1: Plugin object
-plugin: {
-    name: string;
-    version?: string;
-    setup: (builder: PipelineBuilder) => void;
-}
-
-// Form 2: Setup function
-plugin: (builder: PipelineBuilder) => void;
-```
-
-**Returns:** `this` (chainable)
-
-**Example:**
-```typescript
-pipeline
-    .use(validatorPlugin)
-    .use(processorPlugin);
-```
-
----
-
-### `pipeline.process(file): Promise<PipelineResult>`
-
-Process a file through the pipeline.
-
-**Parameters:**
-```typescript
-type PipelineFile = {
-    buffer: Buffer;
-    filename: string;
-    mimeType: string;
-    size: number;
-};
-```
-
-**Returns:** `Promise<PipelineResult>`
-
-```typescript
-type PipelineResult = {
-    url: string;
-    path: string;
-    size: number;
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
-};
-```
-
-**Example:**
-```typescript
-const result = await pipeline.process({
-    buffer: Buffer.from('file content'),
-    filename: 'image.jpg',
-    mimeType: 'image/jpeg',
-    size: 1024
-});
-```
-
----
-
-## Classes
-
-### `PipelineBuilder`
-
-The builder class for configuring pipelines.
-
-**Constructor:**
-```typescript
-constructor(config: PipelineConfig)
-```
-
-**Methods:**
-
-| Method | Parameters | Description |
-|--------|------------|-------------|
-| `addValidator` | `v: Validator` | Add a validator |
-| `addProcessor` | `p: Processor` | Add a processor |
-| `setStorage` | `s: Storage` | Set storage backend |
-| `mergeHooks` | `h: PipelineHooks` | Merge hook functions |
-| `registerPlugin` | `m: PluginMeta` | Register plugin metadata |
-
----
-
-## Types
-
-### Core Types
-
-```typescript
-// Input file
-type PipelineFile = {
-    buffer: Buffer;
-    filename: string;
-    mimeType: string;
-    size: number;
-};
-
-// Processing context
-type PipelineContext = {
-    file: PipelineFile;
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
-};
-
-// Output result
-type PipelineResult = {
-    url: string;
-    path: string;
-    size: number;
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
-};
-```
-
-### Component Types
-
-```typescript
-// Storage backend
-type Storage = {
-    save(file: PipelineFile): Promise<PipelineResult>;
-};
-
-// Validator function
-type Validator = (ctx: PipelineContext) => void | Promise<void>;
-
-// Processor function
-type Processor = (ctx: PipelineContext) => PipelineContext | Promise<PipelineContext>;
-```
-
-### Hook Types
-
-```typescript
-type PipelineHooks = {
+  validators?: Validator[];
+  processors?: Processor[];
+  storage: Storage;
+  hooks?: {
     onStart?: (ctx: PipelineContext) => void | Promise<void>;
     afterValidate?: (ctx: PipelineContext) => void | Promise<void>;
     afterProcess?: (ctx: PipelineContext) => void | Promise<void>;
     onError?: (error: PipelineError | Error, ctx: PipelineContext) => void | Promise<void>;
     onFinish?: (result: PipelineResult, ctx: PipelineContext) => void | Promise<void>;
-};
+  };
+}
+```
+
+### Returned API
+
+```ts
+{
+  use(plugin: PipelinePlugin | ((builder: PipelineBuilder) => void)): this;
+  process(file: PipelineFile): Promise<PipelineResult>;
+}
+```
+
+### Example
+
+```ts
+import {
+  createPipeline,
+  localStorage,
+  maxSize,
+  allowedMimeTypes,
+} from "media-pipeline";
+
+const pipeline = createPipeline({
+  storage: localStorage("./uploads"),
+  validators: [
+    maxSize(5 * 1024 * 1024),
+    allowedMimeTypes(["image/jpeg", "image/png"]),
+  ],
+});
 ```
 
 ---
 
-## Error Types
+## `pipeline.use(plugin)`
 
-```typescript
-// Error codes
-type PipelineErrorCode = 
-    | "VALIDATION_ERROR"
-    | "PROCESSOR_ERROR"
-    | "STORAGE_ERROR"
-    | "UNKNOWN_ERROR";
+Registers a plugin and returns the same pipeline instance.
 
-// Error classes
-class PipelineError extends Error { ... }
-class ValidationError extends PipelineError { ... }
-class ProcessorError extends PipelineError { ... }
-class StorageError extends PipelineError { ... }
+### Supported plugin forms
+
+#### Object plugin
+
+```ts
+const plugin = {
+  name: "images",
+  version: "1.0.0",
+  setup(builder: PipelineBuilder) {
+    // register validators, processors, hooks, or storage
+  },
+};
 ```
+
+#### Function plugin
+
+```ts
+function images(builder: PipelineBuilder) {
+  // register validators, processors, hooks, or storage
+}
+
+images.displayName = "images";
+```
+
+### Runtime behavior
+
+- Object plugins must have a non-empty `name`
+- Function plugins may use `displayName`, then `function.name`, then `"anonymous-plugin"`
+- Invalid plugin inputs throw `PluginError`
+- Registered plugin metadata is copied into each new `process()` call
 
 ---
 
-## Plugin Types
+## `pipeline.process(file)`
 
-```typescript
-type PipelinePluginSetup = (builder: PipelineBuilder) => void;
+Processes a single `PipelineFile`.
 
-type PipelinePlugin = {
-    name: string;
-    version?: string;
-    setup: PipelinePluginSetup;
+### Input
+
+```ts
+type PipelineFile = {
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+  size: number;
 };
-
-function isPipelinePlugin(obj: any): obj is PipelinePlugin;
 ```
+
+### Output
+
+```ts
+type PipelineResult = {
+  url: string;
+  path: string;
+  size: number;
+  metadata: Record<string, any>;
+  meta: {
+    plugins: Array<{ name: string; version?: string; priority?: number }>;
+    trace: Array<{
+      plugin: string;
+      stage: "validator" | "processor" | "hook" | "storage";
+      message: string;
+      timestamp: number;
+      duration?: number;
+    }>;
+  };
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  provider: "local";
+};
+```
+
+### Notes
+
+- `metadata` in the final result is merged as `{ ...ctx.metadata, ...result.metadata }`
+- `meta.trace` is created fresh for each `process()` call
+- built-in local storage returns a `file://` URL
+
+---
+
+## Built-in Utilities
+
+### `localStorage(basePath: string)`
+
+Creates a filesystem-backed `Storage`.
+
+Runtime behavior:
+
+- creates `basePath` if missing
+- checks that `basePath` is writable
+- sanitizes the original filename
+- generates a unique stored filename
+- writes the buffer to disk
+
+### `maxSize(limit: number)`
+
+Returns a validator that throws `ValidationError` when `ctx.file.size > limit`.
+
+### `allowedMimeTypes(types: string[])`
+
+Returns a validator that throws `ValidationError` when the incoming MIME type is not in the allowed list.
+
+### `identityProcessor`
+
+An async processor that returns the incoming context unchanged.
+
+---
+
+## `PipelineBuilder`
+
+`PipelineBuilder` is exported for plugin authors and internal-style composition.
+
+### Methods
+
+| Method | Purpose |
+|--------|---------|
+| `addValidator(v)` | append a validator |
+| `addProcessor(p)` | append a processor |
+| `setStorage(storage)` | replace the active storage |
+| `mergeHooks(hooks)` | chain lifecycle hooks in registration order |
+| `registerPlugin(meta)` | track plugin metadata for later process runs |
+
+---
+
+## Error Model
+
+`PipelineErrorCode` currently includes:
+
+```ts
+"VALIDATION_ERROR" | "PROCESSOR_ERROR" | "STORAGE_ERROR" | "UNKNOWN_ERROR" | "PLUGIN_ERROR"
+```
+
+The library exports matching error classes for callers who want `instanceof` checks.

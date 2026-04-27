@@ -1,131 +1,54 @@
 # Plugin Module
 
-**File:** `src/core/plugin.ts`
+**Files:** `src/types/plugin.ts`, `src/utils/plugins.ts`
 
-## Overview
+## Purpose
 
-Defines the plugin system for creating reusable, composable pipeline extensions.
-
----
-
-## Responsibilities
-
-1. **Plugin Type Definitions** - Define structure for plugins
-2. **Plugin Detection** - Type guard for identifying plugin objects
+The plugin system lets callers package validators, processors, hooks, and storage changes into reusable setup units.
 
 ---
 
-## Types
+## Plugin Types
 
-### PipelinePlugin
-
-```typescript
-type PipelinePlugin = {
-    name: string;
-    version?: string;
-    setup: PipelinePluginSetup;
-};
-```
-
-### PipelinePluginSetup
-
-```typescript
+```ts
 type PipelinePluginSetup = (builder: PipelineBuilder) => void;
-```
 
----
-
-## Helper Functions
-
-### `isPipelinePlugin(obj)`
-
-Type guard to check if an object is a PipelinePlugin.
-
-```typescript
-function isPipelinePlugin(obj: any): obj is PipelinePlugin {
-    return obj && typeof obj === 'object' && 'setup' in obj && typeof obj.setup === 'function';
-}
-```
-
----
-
-## Plugin Forms
-
-### Form 1: Object with setup method
-
-```typescript
-const myPlugin = {
-    name: 'image-processor',
-    version: '1.0.0',
-    setup(builder: PipelineBuilder) {
-        builder.addValidator(allowedMimeTypes(['image/png', 'image/jpeg']));
-        builder.addProcessor(imageResizer);
-        builder.mergeHooks({ onStart: logStart });
-    }
+type PipelinePluginFunction = PipelinePluginSetup & {
+  displayName?: string;
 };
 
-pipeline.use(myPlugin);
-```
-
-### Form 2: Function (setup is the function itself)
-
-```typescript
-const myPlugin = (builder: PipelineBuilder) => {
-    builder.addValidator(allowedMimeTypes(['image/png']));
-    builder.addProcessor(imageResizer);
+type PipelinePlugin = {
+  name: string;
+  version?: string;
+  setup: PipelinePluginSetup;
 };
-
-pipeline.use(myPlugin);
-```
-
-### Form 3: Named function
-
-```typescript
-function imagePlugin(builder: PipelineBuilder) {
-    builder.addValidator(allowedMimeTypes(['image/png']));
-}
-
-imagePlugin.name = 'image-plugin';  // Set name property
-
-pipeline.use(imagePlugin);
 ```
 
 ---
 
-## Code Reference
+## Type Guard
 
-```typescript
-// filepath: src/core/plugin.ts
-import { PipelineBuilder } from "./builder";
+`src/utils/plugins.ts` exposes:
 
-export type PipelinePluginSetup = (builder: PipelineBuilder) => void;
-
-export type PipelinePlugin = {
-    name: string,
-    version?: string,
-    setup: PipelinePluginSetup
-};
-
-export function isPipelinePlugin(obj: any): obj is PipelinePlugin {
-    return obj && typeof obj === 'object' && 'setup' in obj && typeof obj.setup === 'function';
-}
+```ts
+function isPipelinePlugin(obj: any): obj is PipelinePlugin
 ```
 
----
-
-## Plugin Best Practices
-
-1. **Versioning** - Always provide a version for traceability
-2. **Single Responsibility** - Each plugin should handle one concern
-3. **Idempotent Setup** - Plugin setup should be safe to call once
-4. **Error Handling** - Let pipeline handle errors; plugins focus on logic
+It checks for an object with a callable `setup` property.
 
 ---
 
-## Related Modules
+## Runtime Rules In `createPipeline().use()`
 
-| Module | Relationship |
-|--------|--------------|
-| `pipeline.ts` | Processes plugin registration |
-| `builder.ts` | Receives plugin setup calls |
-| `plugin-meta.ts` | Plugin metadata types |
+- object plugins must have a non-empty `name`
+- function plugins may omit a formal name, but then tracing falls back to `displayName` or `"anonymous-plugin"`
+- invalid plugin input throws `PluginError`
+- after setup runs, plugin metadata is registered on the builder
+
+---
+
+## Practical Guidance
+
+- prefer object plugins when you want explicit `name` and `version`
+- use `displayName` on function plugins if the JavaScript function name is unstable or minified
+- keep plugin setup side effects limited to builder mutation

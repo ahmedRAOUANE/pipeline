@@ -2,19 +2,17 @@
 
 ## Overview
 
-This document lists all npm dependencies used by the Media Pipeline project.
+This document lists the npm packages declared in the current repository state.
 
 ---
 
-## Dependencies
+## Runtime Dependencies
 
-### Production Dependencies
+The library declares no production dependencies.
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| None | - | Zero runtime dependencies |
-
-The Media Pipeline is designed to be **dependency-free** at runtime, relying only on Node.js built-in modules.
+| None | - | Runtime code uses Node.js built-ins only |
 
 ---
 
@@ -22,93 +20,77 @@ The Media Pipeline is designed to be **dependency-free** at runtime, relying onl
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `typescript` | ^5.0.0 | TypeScript language support |
-| `tsup` | ^8.0.0 | Build tool for bundling |
-| `vitest` | ^1.0.0 | Testing framework |
-| `@types/node` | ^20.0.0 | Node.js type definitions |
+| `@types/node` | `^25.6.0` | Node.js type definitions |
+| `ts-node` | `^10.9.2` | Manual TypeScript execution |
+| `tsup` | `^8.5.1` | Bundling and declaration output |
+| `typescript` | `^6.0.3` | Source typing |
 
 ---
 
 ## Build Configuration
 
-### tsup
+### `tsup.config.ts`
 
-The project uses `tsup` for building:
-
-```typescript
-// tsup.config.ts
-import { defineConfig } from 'tsup';
+```ts
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-    entry: ['src/index.ts'],
-    format: ['cjs', 'esm'],
+    entry: ["src/index.ts"],
+    format: ["cjs", "esm"],
     dts: true,
-    splitting: false,
-    sourcemap: true,
     clean: true,
+    outDir: "dist",
 });
 ```
 
-**Output:**
-- CommonJS: `dist/index.cjs`
-- ESM: `dist/index.js`
-- TypeScript declarations: `dist/index.d.ts`
+### Output files
+
+- `dist/index.js`
+- `dist/index.mjs`
+- `dist/index.d.ts`
+- `dist/index.d.mts`
 
 ---
 
 ## TypeScript Configuration
 
+Key TypeScript settings from `tsconfig.json`:
+
 ```json
-// tsconfig.json
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "ESNext",
-        "lib": ["ES2020"],
-        "moduleResolution": "node",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true,
-        "declaration": true,
-        "declarationMap": true,
-        "sourceMap": true,
-        "outDir": "./dist"
-    },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules", "dist", "tests"]
+  "compilerOptions": {
+    "module": "NodeNext",
+    "target": "esnext",
+    "types": ["node"],
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "strict": true,
+    "isolatedModules": true,
+    "skipLibCheck": true
+  }
 }
 ```
 
 ---
 
-## Package.json Scripts
+## package.json Scripts
 
 ```json
 {
-    "scripts": {
-        "build": "tsup",
-        "dev": "tsup --watch",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit"
-    }
+  "scripts": {
+    "build": "tsup"
+  }
 }
 ```
 
----
-
-## Philosophy
-
-The project follows a **minimal dependencies** philosophy:
-
-- **No runtime dependencies** - Reduces attack surface and bundle size
-- **Node.js native** - Uses built-in `fs`, `path`, `buffer` modules
-- **Plugin architecture** - External integrations via user-provided implementations
+The repository does not currently define `dev`, `test`, or `typecheck` scripts.
 
 ---
 
-## Related Documentation
+## Package Philosophy
 
-- [Setup Guide](../dev/setup.md)
-- [Environment Configuration](../dev/environment.md)
+- Zero runtime dependencies
+- Dual CommonJS and ESM output
+- Minimal public surface from `src/index.ts`
+- Extension through custom validators, processors, and storage implementations instead of bundled integrations

@@ -1,196 +1,77 @@
 # Types Module
 
-**File:** `src/core/types.ts`
+**File:** `src/types/pipeline.ts`
 
-## Overview
+## Purpose
 
-Defines all core TypeScript types used throughout the pipeline system.
+This module defines the core pipeline contracts shared across the builder, executor, storage, validators, and processors.
 
 ---
 
 ## Core Types
 
-### PipelineFile
-
-Represents the input file to the pipeline.
-
-```typescript
+```ts
 type PipelineFile = {
-    buffer: Buffer;      // File content as Buffer
-    filename: string;    // Original filename
-    mimeType: string;    // MIME type (e.g., 'image/png')
-    size: number;        // Size in bytes
+  buffer: Buffer;
+  filename: string;
+  mimeType: string;
+  size: number;
 };
-```
 
-### PipelineResult
+type PipelineProvider = "local";
 
-Represents the output after pipeline completes.
-
-```typescript
 type PipelineResult = {
-    url: string;                              // Storage location (URL)
-    path: string;                             // Storage location (path)
-    size: number;                             // Final file size
-    metadata: Record<string, any>;            // Processor-added metadata
-    meta: PipelineMeta;                       // Plugin metadata + trace
+  url: string;
+  path: string;
+  size: number;
+  metadata: Record<string, any>;
+  meta: PipelineMeta;
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  provider: PipelineProvider;
 };
-```
 
-### PipelineContext
-
-Carries state through the pipeline stages.
-
-```typescript
 type PipelineContext = {
-    file: PipelineFile;                       // The file being processed
-    metadata: Record<string, any>;            // Accumulated metadata
-    meta: PipelineMeta;                       // Plugin metadata + trace
+  file: PipelineFile;
+  metadata: Record<string, any>;
+  meta: PipelineMeta;
 };
 ```
 
 ---
 
-## Component Types
+## Behavior Types
 
-### Storage
-
-Storage backend interface.
-
-```typescript
+```ts
 type Storage = {
-    save(file: PipelineFile): Promise<PipelineResult>;
+  save(file: PipelineFile): Promise<PipelineResult>;
 };
+
+type Validator = (ctx: PipelineContext) => void | Promise<void>;
+
+type Processor = (ctx: PipelineContext) => PipelineContext | Promise<PipelineContext>;
 ```
-
-### Validator
-
-A function that validates the file.
-
-```typescript
-type Validator = (
-    ctx: PipelineContext
-) => void | Promise<void>;
-```
-
-**Behavior:**
-- Throws on validation failure
-- Returns void on success
-
-### Processor
-
-A function that transforms the file/context.
-
-```typescript
-type Processor = (
-    ctx: PipelineContext
-) => PipelineContext | Promise<PipelineContext>;
-```
-
-**Behavior:**
-- Receives and returns enriched context
 
 ---
 
-## Configuration Types
+## Configuration Type
 
-### PipelineConfig
-
-Configuration for creating a pipeline.
-
-```typescript
+```ts
 type PipelineConfig = {
-    validators?: Validator[];     // Initial validators
-    processors?: Processor[];     // Initial processors
-    storage: Storage;             // Storage backend (required)
-    hooks?: PipelineHooks;        // Lifecycle hooks
+  validators?: Validator[];
+  processors?: Processor[];
+  storage: Storage;
+  hooks?: PipelineHooks;
 };
 ```
 
----
-
-## Owned Types
-
-Types that track which plugin added a component.
-
-```typescript
-type OwnedProcessor = {
-    fn: Processor;
-    plugin: string;
-};
-
-type OwnedValidator = {
-    fn: Validator;
-    plugin: string;
-};
-```
-
-**Note:** These types are defined but not actively used in the current implementation (commented out in builder.ts).
+`PipelineConfig` is used internally by the implementation, but it is not re-exported from the package root today.
 
 ---
 
-## Code Reference
+## Related Type Modules
 
-```typescript
-// filepath: src/core/types.ts
-import { PipelineHooks } from "./hooks";
-import { PipelineMeta } from "./plugin-meta";
-
-export type PipelineFile = {
-    buffer: Buffer;
-    filename: string;
-    mimeType: string;
-    size: number;
-};
-
-export type PipelineResult = {
-    url: string;
-    path: string;
-    size: number;
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
-};
-
-export type Storage = {
-    save(file: PipelineFile): Promise<PipelineResult>;
-};
-
-export type PipelineContext = {
-    file: PipelineFile;
-    metadata: Record<string, any>;
-    meta: PipelineMeta;
-};
-
-export type Validator = (
-    ctx: PipelineContext
-) => void | Promise<void>;
-
-export type Processor = (
-    ctx: PipelineContext
-) => PipelineContext | Promise<PipelineContext>;
-
-export type PipelineConfig = {
-    validators?: Validator[];
-    processors?: Processor[];
-    storage: Storage;
-    hooks?: PipelineHooks;
-};
-
-export type OwnedProcessor = {
-    fn: Processor;
-    plugin: string;
-};
-
-export type OwnedValidator = {
-    fn: Validator;
-    plugin: string;
-};
-```
-
----
-
-## Related Modules
-
-| Module | Relationship |
-|--------|--------------|
-| All modules | Import types from here |
+- `src/types/hooks.ts` - lifecycle hook signatures
+- `src/types/plugin.ts` - plugin types
+- `src/types/plugin-meta.ts` - trace and plugin metadata

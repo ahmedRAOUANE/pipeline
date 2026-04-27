@@ -1,22 +1,25 @@
 # Media Pipeline
 
-**Version:** 1.5.11
-**Runtime:** Node.js
-**Purpose:** Storage-agnostic, extensible file validation, transformation, and storage pipeline.
+A storage-agnostic file processing pipeline for Node.js.
 
----
+Media Pipeline takes a file buffer through a predictable sequence:
 
-## Overview
-
-Media Pipeline is a modular file processing system where files flow through a structured pipeline:
-
-```
-Input → Validators → Processors → Storage → Output
+```text
+file -> validate -> process -> store -> result
 ```
 
-Each stage is fully customizable and extensible via plugins.
+It is designed for server-side applications that already have a file in memory and want a clean way to validate, transform, and persist it.
 
----
+## Features
+
+- Chainable pipeline creation with `createPipeline()`
+- Built-in validators for size and MIME type
+- Built-in local filesystem storage via `localStorage()`
+- Plugin support through `.use()`
+- Lifecycle hooks for start, post-validation, post-processing, finish, and error handling
+- Per-run tracing through `result.meta.trace`
+- Dual package output for CommonJS and ESM
+- Zero runtime npm dependencies
 
 ## Installation
 
@@ -24,312 +27,239 @@ Each stage is fully customizable and extensible via plugins.
 npm install media-pipeline
 ```
 
----
-
-## Basic Usage
+## Quick Start
 
 ```ts
 import {
   createPipeline,
   localStorage,
   maxSize,
-  allowedMimeTypes
-} from 'media-pipeline';
+  allowedMimeTypes,
+} from "media-pipeline";
 
 const pipeline = createPipeline({
+  storage: localStorage("./uploads"),
   validators: [
     maxSize(5 * 1024 * 1024),
-    allowedMimeTypes(['image/jpeg'])
+    allowedMimeTypes(["image/jpeg", "image/png"]),
   ],
-  storage: localStorage('./uploads')
 });
 
-const file = {
-  buffer: Buffer.from('data'),
-  filename: 'image.jpg',
-  mimeType: 'image/jpeg',
-  size: 1024
-};
+const result = await pipeline.process({
+  buffer: Buffer.from("data"),
+  filename: "image.jpg",
+  mimeType: "image/jpeg",
+  size: 1024,
+});
 
-const result = await pipeline.process(file);
-console.log(result);
+console.log(result.url);
+console.log(result.storedName);
+console.log(result.meta.trace);
 ```
 
----
-
-## Core Concepts
-
-### Pipeline Flow
-
-1. **Input**: Raw file object
-2. **Validators**: Ensure file meets requirements
-3. **Processors**: Transform file
-4. **Storage**: Persist file
-5. **Output**: Result with metadata and trace
-
----
-
-## API Reference
+## Core API
 
 ### `createPipeline(config)`
 
-Creates a new pipeline instance.
+Creates a pipeline instance with:
 
-#### Config
+- `use(plugin)`
+- `process(file)`
 
-```ts
-type PipelineConfig = {
-  validators?: Validator[];
-  processors?: Processor[];
-  storage: Storage;
-  hooks?: PipelineHooks;
-};
-```
-
----
-
-### Built-in Utilities
-
-#### `localStorage(basePath)`
-
-Stores files locally.
-
-#### `maxSize(limit)`
-
-Validates file size.
-
-#### `allowedMimeTypes(types)`
-
-Validates MIME type.
-
-#### `identityProcessor()`
-
-No-op processor.
-
----
-
-## Types
-
-### PipelineFile
+Runtime shape of `config`:
 
 ```ts
 {
+  validators?: Validator[];
+  processors?: Processor[];
+  storage: Storage;
+  hooks?: {
+    onStart?: (ctx) => void | Promise<void>;
+    afterValidate?: (ctx) => void | Promise<void>;
+    afterProcess?: (ctx) => void | Promise<void>;
+    onError?: (error, ctx) => void | Promise<void>;
+    onFinish?: (result, ctx) => void | Promise<void>;
+  };
+}
+```
+
+### `pipeline.process(file)`
+
+Processes a single file:
+
+```ts
+type PipelineFile = {
   buffer: Buffer;
   filename: string;
   mimeType: string;
   size: number;
-}
+};
 ```
 
-### PipelineResult
+Returns:
 
 ```ts
-{
+type PipelineResult = {
   url: string;
   path: string;
   size: number;
   metadata: Record<string, any>;
   meta: {
-    plugins: PluginMeta[];
-    trace: TraceEvent[];
+    plugins: Array<{ name: string; version?: string; priority?: number }>;
+    trace: Array<{
+      plugin: string;
+      stage: "validator" | "processor" | "hook" | "storage";
+      message: string;
+      timestamp: number;
+      duration?: number;
+    }>;
   };
+  originalName: string;
+  storedName: string;
+  mimeType: string;
+  provider: "local";
+};
+```
+
+## Built-In Utilities
+
+### Validators
+
+- `maxSize(limit)`
+- `allowedMimeTypes(types)`
+
+Example:
+
+```ts
+validators: [
+  maxSize(10 * 1024 * 1024),
+  allowedMimeTypes(["image/jpeg", "image/png"]),
+];
+```
+
+### Processor
+
+- `identityProcessor`
+
+This is a no-op async processor that returns the incoming context unchanged.
+
+### Storage
+
+- `localStorage(basePath)`
+
+The built-in storage adapter:
+
+- creates the directory if needed
+- checks that it is writable
+- sanitizes the original filename
+- generates a unique stored filename
+- writes the file to disk
+- returns a `file://` URL
+
+## Hooks
+
+Hooks let you attach side effects to the pipeline lifecycle.
+
+```ts
+const pipeline = createPipeline({
+  storage: localStorage("./uploads"),
+  hooks: {
+    onStart(ctx) {
+      console.log("Starting:", ctx.file.filename);
+    },
+    onFinish(result) {
+      console.log("Saved:", result.url);
+    },
+    onError(error) {
+      console.error("Pipeline failed:", error.message);
+    },
+  },
+});
+```
+
+Hook order during a successful run:
+
+1. `onStart`
+2. validators
+3. `afterValidate`
+4. processors
+5. `afterProcess`
+6. storage
+7. `onFinish`
+
+On failure, `onError` is called and the original error is re-thrown.
+
+## Plugins
+
+Plugins can register validators, processors, hooks, or even replace storage through `PipelineBuilder`.
+
+### Object plugin
+
+```ts
+const imagePlugin = {
+  name: "image-plugin",
+  version: "1.0.0",
+  setup(builder) {
+    builder.addValidator(allowedMimeTypes(["image/png", "image/jpeg"]));
+  },
+};
+
+pipeline.use(imagePlugin);
+```
+
+### Function plugin
+
+```ts
+function auditPlugin(builder) {
+  builder.mergeHooks({
+    onStart(ctx) {
+      console.log("Processing", ctx.file.filename);
+    },
+  });
 }
+
+auditPlugin.displayName = "audit-plugin";
+
+pipeline.use(auditPlugin);
 ```
 
-### PipelineContext
+Notes:
+
+- object plugins must have a non-empty `name`
+- function plugins use `displayName`, then `function.name`, then `"anonymous-plugin"` for tracing
+- invalid plugin inputs throw `PluginError`
+
+## Custom Processors
 
 ```ts
-{
-  file: PipelineFile;
-  metadata: Record<string, any>;
-  meta: PipelineMeta;
-}
-```
+import type { Processor } from "media-pipeline";
 
----
-
-## Validators
-
-Validators check conditions and throw errors if invalid.
-
-```ts
-type Validator = (ctx: PipelineContext) => void | Promise<void>;
-```
-
-### Example
-
-```ts
-function imageOnlyValidator(ctx) {
-  if (!ctx.file.mimeType.startsWith('image/')) {
-    throw new Error('Invalid file type');
-  }
-}
-```
-
----
-
-## Processors
-
-Processors transform files.
-
-```ts
-type Processor = (ctx: PipelineContext) => PipelineContext | Promise<PipelineContext>;
-```
-
-### Example
-
-```ts
-function renameProcessor(ctx) {
+const renameProcessor: Processor = async (ctx) => {
   return {
     ...ctx,
     file: {
       ...ctx.file,
-      filename: `processed-${ctx.file.filename}`
-    }
+      filename: `processed-${ctx.file.filename}`,
+    },
   };
-}
-```
-
----
-
-## Storage
-
-Storage persists files.
-
-```ts
-type Storage = {
-  save(file: PipelineFile): Promise<PipelineResult>;
 };
 ```
-
----
-
-## Hooks
-
-Hooks allow lifecycle customization.
-
-```ts
-type PipelineHooks = {
-  onStart?: (ctx) => void | Promise<void>;
-  afterValidate?: (ctx) => void | Promise<void>;
-  afterProcess?: (ctx) => void | Promise<void>;
-  onError?: (error, ctx) => void | Promise<void>;
-  onFinish?: (result, ctx) => void | Promise<void>;
-};
-```
-
----
-
-## Plugin System
-
-Plugins extend functionality.
-
-### Plugin Types
-
-#### Object Plugin
-
-```ts
-{
-  name: string;
-  version?: string;
-  setup(builder: PipelineBuilder): void;
-}
-```
-
-#### Function Plugin
-
-```ts
-(builder: PipelineBuilder) => void;
-```
-
----
-
-### Builder API
-
-```ts
-builder.addValidator(fn);
-builder.addProcessor(fn);
-builder.mergeHooks(hooks);
-builder.setStorage(storage);
-```
-
----
-
-### Example Plugin (Image Resize)
-
-```ts
-const sharpPlugin = {
-  name: 'sharp-resize',
-  setup(builder) {
-    builder.addProcessor(async (ctx) => {
-      if (ctx.file.mimeType.startsWith('image/')) {
-        const sharp = require('sharp');
-        const buffer = await sharp(ctx.file.buffer)
-          .resize(800, 800)
-          .toBuffer();
-
-        return {
-          ...ctx,
-          file: {
-            ...ctx.file,
-            buffer,
-            size: buffer.length
-          }
-        };
-      }
-      return ctx;
-    });
-  }
-};
-```
-
----
-
-## Execution Flow
-
-1. `onStart`
-2. Validators
-3. `afterValidate`
-4. Processors
-5. `afterProcess`
-6. Storage
-7. `onFinish`
-
-On error:
-
-* `onError` is called
-* Error is re-thrown
-
----
-
-## Tracing
-
-Each step is recorded.
-
-```ts
-{
-  plugin: string;
-  stage: 'validator' | 'processor' | 'hook' | 'storage';
-  message: string;
-  duration?: number;
-  timestamp: number;
-}
-```
-
----
 
 ## Errors
 
-### Classes
+The package exports these error classes:
 
-* `PipelineError`
-* `ValidationError`
-* `ProcessorError`
-* `StorageError`
+- `PipelineError`
+- `ValidationError`
+- `ProcessorError`
+- `StorageError`
+- `PluginError`
 
-### Example Handling
+Example:
 
 ```ts
+import { ValidationError } from "media-pipeline";
+
 try {
   await pipeline.process(file);
 } catch (err) {
@@ -339,68 +269,23 @@ try {
 }
 ```
 
----
+## Current Limitations
 
-## Best Practices
+- Files are processed in memory as `Buffer` objects
+- Validators and processors run sequentially
+- Only local filesystem storage is built in
+- `PipelineResult.provider` is currently typed as `"local"`
+- The repository currently exposes only a `build` npm script
 
-* Use named functions for better tracing
-* Always handle errors
-* Keep processors pure
-* Use plugins for reusable logic
+## Development
 
----
+Build the package with:
 
-## Limitations
-
-* No streaming support
-* Sequential execution only
-* Trace accumulation across runs
-* No automatic error wrapping
-
----
-
-## Advanced Usage
-
-### Using Plugins
-
-```ts
-pipeline.use(sharpPlugin);
+```bash
+npm run build
 ```
 
-### Custom Storage Example
-
-```ts
-const memoryStorage = {
-  async save(file) {
-    return {
-      url: 'memory://file',
-      path: file.filename,
-      size: file.size,
-      metadata: {}
-    };
-  }
-};
-```
-
----
-
-## Design Principles
-
-* Separation of concerns
-* Composability
-* Extensibility
-* Minimal core
-
----
-
-## Future Improvements
-
-* Streaming support
-* Parallel processing
-* Queue system
-* Plugin marketplace
-
----
+The repository includes more detailed project docs under [`docs/`](docs/), including architecture, module breakdowns, API notes, and data-flow references.
 
 ## License
 

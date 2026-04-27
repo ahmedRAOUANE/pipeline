@@ -1,38 +1,40 @@
 # Media Pipeline - Project Overview
 
-**Version:** 1.5.12  
+**Version:** 1.6.1  
 **Runtime:** Node.js  
 **Language:** TypeScript  
-**License:** MIT  
-**Author:** ahmedRAOUANE
+**Package name:** `media-pipeline`  
+**License:** MIT
 
 ---
 
 ## Purpose
 
-Media Pipeline is a **storage-agnostic, extensible file processing pipeline** for Node.js. It provides a modular architecture for validating, processing, and storing files through a configurable pipeline system.
+Media Pipeline is a buffer-based file processing library for Node.js. It lets consumers validate a file, run one or more processors, and persist the final output through a storage adapter behind a small chainable API.
 
 ---
 
-## Core Value Proposition
+## Current Capabilities
 
-- **Plugin-based extensibility** - Add custom validators, processors, and hooks
-- **Storage abstraction** - Swap storage backends without changing pipeline logic
-- **Lifecycle hooks** - Execute custom code at key pipeline stages
-- **Traceability** - Built-in execution tracing for debugging
+- Chainable pipeline creation through `createPipeline()`
+- Plugin registration through `.use()` with object plugins or setup functions
+- Built-in validators: `maxSize()` and `allowedMimeTypes()`
+- Built-in processor: `identityProcessor`
+- Built-in storage adapter: `localStorage(basePath)`
+- Lifecycle hooks: `onStart`, `afterValidate`, `afterProcess`, `onFinish`, `onError`
+- Per-run tracing with stage, message, timestamp, and duration metadata
+- Typed error classes including `ValidationError`, `ProcessorError`, `StorageError`, and `PluginError`
+- Dual package output for `require()` and `import`
 
 ---
 
-## Key Features
+## Current Constraints
 
-| Feature | Description |
-|---------|-------------|
-| Validators | Pre-storage file validation (size, MIME type, custom) |
-| Processors | File transformation/augmentation pipeline |
-| Storage | Pluggable storage backends (local, cloud, etc.) |
-| Hooks | Lifecycle callbacks (onStart, afterValidate, afterProcess, onFinish, onError) |
-| Plugins | Bundle validators, processors, and hooks into reusable units |
-| Tracing | Execution trace with timing and stage information |
+- Files are processed in memory as `Buffer` objects
+- Validators and processors run sequentially
+- Only the local filesystem adapter is built in today
+- `package.json` exposes only a `build` script; the `tests/` folder contains ad hoc scripts rather than an npm-wired suite
+- `PipelineResult.provider` is currently typed as `"local"`
 
 ---
 
@@ -43,55 +45,65 @@ import {
   createPipeline,
   localStorage,
   maxSize,
-  allowedMimeTypes
-} from 'media-pipeline';
+  allowedMimeTypes,
+} from "media-pipeline";
 
 const pipeline = createPipeline({
   validators: [
     maxSize(5 * 1024 * 1024),
-    allowedMimeTypes(['image/jpeg', 'image/png'])
+    allowedMimeTypes(["image/jpeg", "image/png"]),
   ],
-  storage: localStorage('./uploads')
+  storage: localStorage("./uploads"),
 });
 
-const file = {
-  buffer: Buffer.from('data'),
-  filename: 'image.jpg',
-  mimeType: 'image/jpeg',
-  size: 1024
-};
-
-const result = await pipeline.process(file);
+const result = await pipeline.process({
+  buffer: Buffer.from("data"),
+  filename: "image.jpg",
+  mimeType: "image/jpeg",
+  size: 1024,
+});
 ```
 
 ---
 
 ## Project Structure
 
-```
+```text
 src/
-├── index.ts              # Public API exports
-├── core/
-│   ├── pipeline.ts       # Pipeline factory
-│   ├── builder.ts        # Pipeline builder
-│   ├── executor.ts       # Pipeline execution engine
-│   ├── tracer.ts         # Execution tracing
-├── types/
-│   ├── hooks.ts             # Lifecycle hook types
-│   ├── plugin.ts            # Plugin definitions
-│   ├── plugin-meta.ts       # Plugin metadata types
-│   └── pipeline.ts          # Core type definitions
-├── storage/
-│   └── local.storage.ts  # Local filesystem storage
-├── validators/
-│   ├── size.validator.ts # File size validation
-│   └── mime.validator.ts # MIME type validation
-├── processors/
-│   └── identity.processor.ts # No-op processor
-└── utils/
-│   ├── plugins.ts        # plugin utilities
-    └── errors.ts         # Error classes
+|-- core/
+|   |-- builder.ts
+|   |-- executor.ts
+|   |-- pipeline.ts
+|   `-- tracer.ts
+|-- processors/
+|   `-- identity.processor.ts
+|-- storage/
+|   `-- local.storage.ts
+|-- types/
+|   |-- hooks.ts
+|   |-- pipeline.ts
+|   |-- plugin-meta.ts
+|   `-- plugin.ts
+|-- utils/
+|   |-- errors.ts
+|   |-- file.ts
+|   `-- plugins.ts
+|-- validators/
+|   |-- mime.validator.ts
+|   `-- size.validator.ts
+`-- index.ts
 ```
+
+---
+
+## Package Outputs
+
+- CommonJS entry: `dist/index.js`
+- ESM entry: `dist/index.mjs`
+- Type declarations: `dist/index.d.ts` and `dist/index.d.mts`
+- Root export map:
+  - `require("media-pipeline")` -> `dist/index.js`
+  - `import "media-pipeline"` -> `dist/index.mjs`
 
 ---
 

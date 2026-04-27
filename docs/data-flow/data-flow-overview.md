@@ -1,198 +1,116 @@
 # Data Flow Overview
 
-## High-Level Data Flow
+## High-Level Flow
 
+```text
+createPipeline(config)
+  -> optional .use(plugin)
+  -> process(file)
+  -> hooks.onStart
+  -> validators[]
+  -> hooks.afterValidate
+  -> processors[]
+  -> hooks.afterProcess
+  -> storage.save(ctx.file)
+  -> hooks.onFinish
+  -> PipelineResult
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT CODE                                    │
-│  createPipeline(config).use(plugin).process(file)                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         PIPELINE CREATION PHASE                             │
-│  1. createPipeline(config)                                                  │
-│     └── Instantiates PipelineBuilder                                        │
-│  2. .use(plugin)                                                            │
-│     └── Calls plugin.setup(builder)                                         │
-│     └── Registers plugin metadata                                           │
-│  3. Returns { use, process }                                                │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         PROCESSING PHASE                                    │
-│                                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────┐ │
-│  │   onStart    │───▶│  VALIDATORS  │───▶│  PROCESSORS  │───▶│  STORAGE │ │
-│  │   (hook)     │    │   (array)    │    │   (array)    │    │  (save)  │ │
-│  └──────────────┘    └──────────────┘    └──────────────┘    └──────────┘ │
-│       │                    │                    │                  │       │
-│       ▼                    ▼                    ▼                  ▼       │
-│  [tracing]           [tracing]             [tracing]           [tracing]  │
-│                                                                             │
-│  On Error: ─────────────────────────────────────────────────────────▶       │
-│            onError hook + exception thrown                                 │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         RESULT PHASE                                        │
-│  PipelineResult { url, path, size, metadata, meta }                        │
-└─────────────────────────────────────────────────────────────────────────────┘
+
+On any error:
+
+```text
+stage throws
+  -> hooks.onError
+  -> original error re-thrown
 ```
 
 ---
 
-## Data Transformation
+## Creation Phase
 
-### Input → Output
-
-| Stage | Input | Output |
-|-------|-------|--------|
-| **Entry** | `PipelineFile` | - |
-| **Validators** | `PipelineFile` | (throws on invalid) |
-| **Processors** | `PipelineContext` | `PipelineContext` (enriched) |
-| **Storage** | `PipelineFile` | `PipelineResult` |
-| **Exit** | - | `PipelineResult` |
-
-### Context Enrichment
-
-The `PipelineContext` accumulates data through the pipeline:
-
-```typescript
-// Initial state
-ctx = {
-    file: { buffer, filename, mimeType, size },
-    metadata: {},
-    meta: { plugins: [], trace: [] }
-}
-
-// After processors
-ctx.metadata = { step1: true, step2: true, ... }
-ctx.meta.trace = [ /* trace events */ ]
-
-// Final result
-result = {
-    url, path, size,
-    metadata: ctx.metadata,
-    meta: ctx.meta
-}
-```
+1. `createPipeline(config)` instantiates a `PipelineBuilder`
+2. `.use(plugin)` mutates the builder by registering validators, processors, hooks, or storage
+3. plugin metadata is stored on the builder for future process runs
 
 ---
 
-## Trace Data Flow
+## Processing Phase
 
-Each pipeline stage emits trace events:
+### Initial context
 
-```typescript
-type PluginTraceEvent = {
-    plugin: string;           // Source of the event
-    stage: "validator" | "processor" | "hook" | "storage";
-    message: string;          // Event description
-    timestamp: number;        // Unix timestamp
-    duration?: number;        // Execution time in ms
+```ts
+const ctx = {
+  file,
+  metadata: {},
+  meta: {
+    plugins: [...builder.meta.plugins],
+    trace: [],
+  },
 };
 ```
 
-**Trace Collection:**
-1. `onStart` hook triggers → trace event
-2. Each validator completes → trace event
-3. `afterValidate` hook triggers → trace event
-4. Each processor completes → trace event
-5. `afterProcess` hook triggers → trace event
-6. Storage save completes → trace event
-7. `onFinish` hook triggers → trace event
+### Stage order
+
+| Stage | Input | Output |
+|-------|-------|--------|
+| `onStart` | `PipelineContext` | same context |
+| validators | `PipelineContext` | same context or throw |
+| `afterValidate` | `PipelineContext` | same context |
+| processors | `PipelineContext` | enriched `PipelineContext` |
+| `afterProcess` | `PipelineContext` | same context |
+| storage | `PipelineFile` | `PipelineResult` |
+| `onFinish` | `PipelineResult`, `PipelineContext` | side effects only |
 
 ---
 
-## Error Propagation
+## Metadata Flow
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Validator  │────▶│  Processor  │────▶│   Storage   │
-│  (throws)   │     │  (throws)   │     │  (throws)   │
-└─────────────┘     └─────────────┘     └─────────────┘
-       │                   │                   │
-       └───────────────────┴───────────────────┘
-                           │
-                           ▼
-                  ┌─────────────────┐
-                  │   onError hook  │
-                  │   (if registered)│
-                  └────────┬────────┘
-                           │
-                           ▼
-                  ┌─────────────────┐
-                  │  Exception      │
-                  │  re-thrown      │
-                  └─────────────────┘
-```
+- `ctx.metadata` starts as `{}` and may be enriched by processors or hooks
+- `result.metadata` comes from the storage adapter
+- the final return value merges metadata as `{ ...ctx.metadata, ...result.metadata }`
+- `ctx.meta.trace` is the authoritative trace array returned to the caller
 
 ---
 
-## Hook Execution Order
+## Trace Flow
 
-| # | Stage | Hook Called | Parameters |
-|---|-------|-------------|------------|
-| 1 | Start | `onStart` | `ctx` |
-| 2 | Validate | (each validator) | `ctx` |
-| 3 | Post-Validate | `afterValidate` | `ctx` |
-| 4 | Process | (each processor) | `ctx` |
-| 5 | Post-Process | `afterProcess` | `ctx` |
-| 6 | Storage | `storage.save()` | `file` |
-| 7 | Finish | `onFinish` | `result, ctx` |
-| - | Error (any stage) | `onError` | `error, ctx` |
+Each run records events like:
 
----
-
-## Plugin Contribution Flow
-
-```
-Plugin.setup(builder)
-       │
-       ├── builder.addValidator(fn) ──▶ validators[]
-       ├── builder.addProcessor(fn) ──▶ processors[]
-       └── builder.mergeHooks({...}) ──▶ hooks{} (merged)
-              │
-              └── Multiple plugins' hooks are chained
-                  (executed in registration order)
-```
-
----
-
-## Key Data Structures
-
-### PipelineFile (Input)
-```typescript
+```ts
 {
-    buffer: Buffer;      // File content
-    filename: string;    // Original filename
-    mimeType: string;    // MIME type
-    size: number;        // Size in bytes
+  plugin: "core" | "storage" | "<validator name>" | "<processor name>",
+  stage: "validator" | "processor" | "hook" | "storage",
+  message: string,
+  timestamp: number,
+  duration?: number,
 }
 ```
 
-### PipelineContext (Processing)
-```typescript
-{
-    file: PipelineFile;
-    metadata: Record<string, any>;  // Processor-added data
-    meta: {
-        plugins: PluginMeta[];      // Registered plugins
-        trace: PluginTraceEvent[];  // Execution trace
-    };
-}
-```
+The executor emits trace entries after:
 
-### PipelineResult (Output)
-```typescript
+1. `onStart`
+2. each validator
+3. `afterValidate`
+4. each processor
+5. `afterProcess`
+6. storage save
+7. `onFinish`
+8. `onError`
+
+---
+
+## Result Shape
+
+```ts
 {
-    url: string;         // Storage location (URL)
-    path: string;        // Storage location (path)
-    size: number;        // Final file size
-    metadata: {...};     // Enriched metadata
-    meta: {...};         // Plugin metadata + trace
+  url,
+  path,
+  size,
+  metadata,
+  meta,
+  originalName,
+  storedName,
+  mimeType,
+  provider: "local",
 }
 ```

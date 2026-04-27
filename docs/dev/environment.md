@@ -2,215 +2,113 @@
 
 ## Overview
 
-This document describes environment variables and configuration options for the Media Pipeline.
+The library itself does not require any environment variables. All core behavior is configured in code through `createPipeline()` and `localStorage(basePath)`.
+
+Environment variables only become relevant in consuming applications when they want to parameterize storage paths, size limits, or third-party credentials for custom adapters.
 
 ---
 
-## Environment Variables
+## No Required Core Variables
 
-### Storage Configuration
+The following are true for the current codebase:
 
-| Variable | Required | Description | Default |
-|----------|----------|-------------|---------|
-| `STORAGE_PATH` | No | Base path for local storage | `./uploads` |
-| `STORAGE_BASE_URL` | No | Public URL prefix for stored files | Dynamic |
+- `localStorage()` receives its base path as a function argument
+- validators receive their limits through normal function parameters
+- processors and hooks are regular functions and can read `process.env` if the consuming app wants them to
+- the package does not read any environment variables on its own
 
-### Custom Storage Providers
+---
 
-#### AWS S3
+## Common Consumer Patterns
 
-```bash
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_REGION=us-east-1
-S3_BUCKET=your-bucket-name
+### Local storage path
+
+```ts
+const uploadPath = process.env.STORAGE_PATH || "./uploads";
+
+const pipeline = createPipeline({
+  storage: localStorage(uploadPath),
+});
 ```
 
-#### Cloudinary
+### Validation limits
 
-```bash
-CLOUDINARY_CLOUD_NAME=your_cloud_name
-CLOUDINARY_API_KEY=your_api_key
-CLOUDINARY_API_SECRET=your_api_secret
-```
+```ts
+const maxBytes = Number(process.env.MAX_FILE_SIZE || "5242880");
+const allowedTypes = (process.env.ALLOWED_MIME_TYPES || "image/jpeg,image/png").split(",");
 
-#### Azure Blob
-
-```bash
-AZURE_STORAGE_CONNECTION_STRING=your_connection_string
-AZURE_STORAGE_CONTAINER_NAME=your_container
+const pipeline = createPipeline({
+  storage: localStorage("./uploads"),
+  validators: [maxSize(maxBytes), allowedMimeTypes(allowedTypes)],
+});
 ```
 
 ---
 
-## Configuration Files
+## Custom Storage Credentials
 
-### TypeScript Configuration
+If you implement your own `Storage`, the credentials belong to that integration layer rather than the core package.
 
-`tsconfig.json`:
+Examples:
+
+```bash
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=...
+S3_BUCKET=...
+```
+
+```bash
+AZURE_STORAGE_CONNECTION_STRING=...
+AZURE_STORAGE_CONTAINER_NAME=...
+```
+
+---
+
+## Current Build Configuration
+
+### `tsconfig.json`
 
 ```json
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "ESNext",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
-    }
+  "compilerOptions": {
+    "module": "NodeNext",
+    "target": "esnext",
+    "types": ["node"],
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "strict": true,
+    "jsx": "react-jsx",
+    "ignoreDeprecations": "6.0",
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  }
 }
 ```
 
-### Build Configuration
+### `tsup.config.ts`
 
-`tsup.config.ts`:
-
-```typescript
-import { defineConfig } from 'tsup';
+```ts
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-    entry: ['src/index.ts'],
-    format: ['cjs', 'esm'],
+    entry: ["src/index.ts"],
+    format: ["cjs", "esm"],
     dts: true,
-    splitting: false,
-    sourcemap: true,
     clean: true,
+    outDir: "dist",
 });
 ```
 
 ---
 
-## Pipeline Configuration
+## Operational Notes
 
-### Programmatic Configuration
-
-```typescript
-const pipeline = createPipeline({
-    storage: localStorage(process.env.STORAGE_PATH || './uploads'),
-    validators: [
-        maxSize(parseInt(process.env.MAX_FILE_SIZE || '5242880'))
-    ],
-    hooks: {
-        onError: (err, ctx) => {
-            console.error('Pipeline error:', err.message);
-        }
-    }
-});
-```
-
-### Validation Limits
-
-```typescript
-// Environment-driven limits
-const MAX_SIZE = parseInt(process.env.MAX_FILE_SIZE || '10485760');  // 10MB default
-const ALLOWED_TYPES = (process.env.ALLOWED_MIME_TYPES || 'image/jpeg,image/png').split(',');
-
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    validators: [
-        maxSize(MAX_SIZE),
-        allowedMimeTypes(ALLOWED_TYPES)
-    ]
-});
-```
-
----
-
-## Logging Configuration
-
-### Basic Logging
-
-```typescript
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    hooks: {
-        onStart: (ctx) => console.log('Starting:', ctx.file.filename),
-        onFinish: (result) => console.log('Completed:', result.url),
-        onError: (err) => console.error('Error:', err.message)
-    }
-});
-```
-
-### Structured Logging
-
-```typescript
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    hooks: {
-        onStart: (ctx) => {
-            console.log(JSON.stringify({
-                event: 'pipeline_start',
-                filename: ctx.file.filename,
-                size: ctx.file.size,
-                timestamp: new Date().toISOString()
-            }));
-        }
-    }
-});
-```
-
----
-
-## Security Configuration
-
-### File Size Limits
-
-Always set maximum file sizes to prevent DoS:
-
-```typescript
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '10485760'); // 10MB
-
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    validators: [maxSize(MAX_FILE_SIZE)]
-});
-```
-
-### MIME Type Validation
-
-Restrict allowed types:
-
-```typescript
-const ALLOWED_TYPES = (process.env.ALLOWED_MIME_TYPES || 'image/jpeg,image/png,image/gif').split(',');
-
-const pipeline = createPipeline({
-    storage: localStorage('./uploads'),
-    validators: [allowedMimeTypes(ALLOWED_TYPES)]
-});
-```
-
----
-
-## Node.js Configuration
-
-### Recommended Settings
-
-```bash
-# Increase memory for large file processing
-NODE_OPTIONS="--max-old-space-size=4096"
-
-# Enable experimental features if needed
-NODE_OPTIONS="--experimental-vm-modules"
-```
-
-### Process Environment
-
-```typescript
-// Access environment in processors
-const myProcessor: Processor = async (ctx) => {
-    const featureFlag = process.env.ENABLE_FEATURE === 'true';
-    if (featureFlag) {
-        // Feature logic
-    }
-    return ctx;
-};
-```
-
----
-
-## Related Documentation
-
-- [Setup Guide](setup.md)
-- [API Reference](../api/endpoints.md)
-- [External Services](../dependencies/external-services.md)
+- `localStorage()` writes to disk and checks that the target directory is writable
+- the generated result URL uses the `file://` scheme for local storage
+- per-run trace data is created in memory and returned through `result.meta.trace`
